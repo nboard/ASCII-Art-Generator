@@ -23,291 +23,52 @@ const char* window_name = "Edge Map";
 
 double lenWidRatio = 2.2; // how many character widths equal one character height (2.2 is my vs console)
 
+/**************************************
+ * Helper Functions *******************
+ **************************************/
+// helper functions primarily used by ascii identification functions
+
+/* isWhite: determines if there are enough white pixels in a region to consider it white. 
+ * A region is considered white if it has at least as many white pixels as the regions width.
+ * args:
+ *	int xMin: minimum x pixel coordinate to check
+ *	int xMax: maximum x pixel coordinate to check
+ *	int yMin: minimum y pixel coordinate to check
+ *	int yMax: maximum y pixel coordinate to check
+*/ 
+// FIXME: needs to have detected_edges passed in rather than global
+bool isWhite(int xMin, int xMax, int yMin, int yMax) {
+	float lit = 0;
+	float all = 0;
+	
+	// do some quick sanity checks
+	if (xMin >= detected_edges.cols) return false;
+	if (yMin >= detected_edges.rows) return false;
+	if (xMax > detected_edges.cols) xMax = detected_edges.cols;
+	if (yMax > detected_edges.rows) yMax = detected_edges.rows;
+
+	// perform the check
+	for (int x = xMin; x < xMax; x++) {
+		for (int y = yMin; y < yMax; y++) {
+			if (detected_edges.at<char>(y, x) != 0) {
+				lit++;
+			}
+			all++;
+		}
+	}
+	if (lit > 0) {
+	}
+	return (lit / all) >= (xMax-xMin)/all;
+}
+
+/**************************************
+ * Ascii Identification ***************
+ **************************************/
+// These functions convert the pixels in a region into one ascii character
+
 // always returns the # character. Good to get rough outlines of images. Only good for huge images
 char constChar(int xMin, int xMax, int yMin, int yMax) {
 	return '#';
-}
-
-// given an image and the subset of pixels to look at, determine which ascii character is the closest
-// this method attempts to determine which character to use based on the region that are colored in the image and matching that to a known image
-// is flawed in that it does not allow the same shape to be shifted and get any kind of similar result. Probably better for larger images, where course details work well...
-char regionChar(int xMin, int xMax, int yMin, int yMax) {
-	// note: x = columns = i, y = rows = j
-	// use six regions: four corners, center, and edge
-	float topL = 0, botL = 0, topR = 0, botR = 0;
-	float center = 0, edge = 0, total = 0;
-	float horizontal = 0, vertical = 0;
-	int xSize = (xMax - xMin + 1);
-	int xBorder = (xSize / 2) + xMin;
-	int xCenterL = (xSize / 3) + xMin;
-	int xCenterR = (xSize * 2 / 3) + xMin;
-	int ySize = (yMax - yMin + 1);
-	int yBorder = (ySize / 2) + yMin;
-	int yCenterT = (ySize / 3) + yMin;
-	int yCenterB = (ySize * 2 / 3) + yMin;
-	
-	printf("\n--%d-%d--start--%d-%d----\n", yMin, yMax, xMin, xMax);
-	for (int j = yMin; j <= yMax; j++) {
-		for (int i = xMin; i <= xMax; i++) {
-			if (detected_edges.at<char>(j, i) != 0) {
-				// found a white pixel. inc the relivant regions.
-				// Note that if there is an odd dimension, right and bottom get the extra pixel
-				if (i < xBorder && j < yBorder) topL++;
-				else if (i < xBorder && j >= yBorder) botL++;
-				else if (i >= xBorder && j < yBorder) topR++;
-				else if (i >= xBorder && j >= yBorder) botR++;
-
-				// center region is considerably smaller in area than the edge. It just needs to tell O from * for the most part
-				if (i >= xCenterL && i <= xCenterR && j >= yCenterT && j <= yCenterB) center++;
-				else edge++;
-
-				// horizontal and vertical are f or finding -, |, and +
-				if (i >= xCenterL && i <= xCenterR) vertical++;
-				if (j >= yCenterT && j <= yCenterB) horizontal++;
-
-				total++;
-				printf("##");
-			}
-			else printf("  ");
-		}
-		printf("\n");
-	}
-	
-	// scale results to % of the pixels found
-	if (total < 1) return ' ';
-	topL /= total;
-	topR /= total;
-	botL /= total;
-	botR /= total;
-	center /= total;
-	edge /= total;
-	horizontal /= total;
-	vertical /= total;
-	float area = xSize * ySize;
-	float density = total / area;
-	printf("top left:     %f\ntop right:    %f\nbottom left:  %f\nbottom right: %f\ncenter:       %f\nedge:         %f\ndensity:      %f\nhorizontal:   %f\nvertical:     %f\n", 
-		topL, topR, botL, botR, center, edge, density, horizontal, vertical);
-	printf("-------end--------\n");
-	// now pick the which character desired
-	if (topL > .25 && topR < 0.1 && botL < 0.1 && botR > 0.5) return '\\';
-	else if (topL < .1 && topR > .25 && botL > 0.25 && botR < 0.1) return '/';
-	else if (center > .9 && topL < .35 && topR < .35 && botL < .35 && botR < .35) return '*';
-	else if (center < .4 && topL < .35 && topR < .35 && botL < .35 && botR < .35) return 'O';
-	else if (horizontal > .6 && vertical > .6 && center < .5) return '+';
-	else if (horizontal < .5 && vertical > .8) return '|'; // top and bottom symitry, not left to right
-	else if (horizontal > .8 && vertical < .5) return '-';
-	else if (edge > .5 && botL + botR > .8) return '_';
-	else if (density > 0.5) return '#';
-	return '?';
-}
-
-// determine what the best character is based off of some line of best fit type math... (Actually, it does some primative feature matches, and then gives up and does line of best fit)
-// tries to determine +=-_()[]\/|<>.':`~#^*0oXUV
-// Ultimately, follows the hopeless task of trying to shrink enless kinds of possible combos into a finite set. Bad idea
-// TODO: try some extra level of convilution so always falls into one of the desired slots. Clump together more...?
-	
-char lineChar(int xMin, int xMax, int yMin, int yMax) {
-	// so maybe we just kinda itterate over Y and pick out the faeture that on X... either 1 spot, 2 sopts, or line accross. 
-	// if 2 spots for more than 1 y value, then can tell if converge or diverge based on if was every 1 point at a point. 
-	// if a single point 
-	// note: x = columns = i, y = rows = j
-	// use six regions: four corners, center, and edge
-	float total = 0, totalX = 0, totalY = 0, xCount = 0;
-	float avgX, avgY;
-	int xSize = (xMax - xMin + 1);
-	int ySize = (yMax - yMin + 1);
-	int firstX = -1;
-	int lastX = -1;
-	int numFlips = 0; 
-	float xAvgWid = 0;
-	std::vector<int> xFeatures; //0 is blank, 1 is one point, 2 is two points, 3+ is a line
-	std::vector<float> xCenters; // if I wind up needing to store pixel locations. 
-	int prevX = -1;
-	int xParts = 0;
-#ifdef DEBUG_MODE
-	printf("\n--%d-%d--start--%d-%d----\n", yMin, yMax, xMin, xMax);
-
-	for (int j = yMin; j <= yMax; j++) {
-		for (int i = xMin; i <= xMax; i++) {
-			if (detected_edges.at<char>(j, i) != 0) {
-				printf("##");
-			}
-			else printf("  ");
-		}
-		printf("\n");
-	}
-#endif
-	// walk along and see what types of features have; look at slope compared to prev, etc
-	for (int j = yMin; j <= yMax; j++) {
-		for (int i = xMin; i <= xMax; i++) {
-			if (detected_edges.at<char>(j, i) != 0) {
-				if (firstX == -1) firstX = i;
-				lastX = i;
-				if (prevX != -1) {
-					if (((float)(i - prevX)) / ((float)xSize) > 0.4) { //needs to be spread out to recognize a new slot
-						xParts++;
-					}
-					prevX = i;
-				}
-				else {
-					prevX = i;
-					xParts++;
-				}
-				total++;
-				totalX += i-xMin;
-				totalY += j-yMin;
-			//	printf("##");
-			}
-			//else printf("  ");
-		}
-		if (xParts > 3) xParts = 3;
-		// detect if was a continous line.   
-		else if (xParts == 1 && ((float)(lastX - firstX) / ((float)xSize) > 0.5) && firstX != lastX) xParts = 3;
-		// if the count is new, then add in the next feature
-		if (xFeatures.empty() || xFeatures.back() != xParts) xFeatures.push_back(xParts);
-		
-		// only update x width average if something was found
-		if (xParts != 0) {
-			xAvgWid += ((float)(lastX - firstX)) / ((float)xSize);
-			xCount++;
-
-			// also get x center
-			xCenters.push_back(((float)(lastX + firstX)) / 2);
-		}
-
-		prevX = -1;
-		firstX = -1;
-		xParts = 0;
-		//printf("\n");
-	}
-
-	// take the average pos, and scale it to %
-	avgX = (totalX / (float)total) / (float)(xSize);	// average x %
-	avgY = (totalY / (float)total) / (float)(ySize);	// average y %
-	float density = total / (float)((xSize) * (ySize));	// density
-	xAvgWid /= (float)xCount;							// average of the x widths wherever lines were 
-	// print out what it looks like to the program
-#ifdef DEBUG_MODE
-	for (int i = 0; i < xFeatures.size(); i++) {
-		if (xFeatures.at(i) == 3) printf("horiz line\n");
-		else if (xFeatures.at(i) == 2) printf("two chunks\n");
-		else if (xFeatures.at(i) == 1) printf("one chunk\n");
-		else if (xFeatures.at(i) == 0) printf("nuthin'\n");
-		else printf("err... something?\n");
-	}
-	printf("avg x:   %f\navg y:   %f\ndensity: %f\nx width: %f\n", avgX, avgY, density, xAvgWid);
-	printf("-------end--------\n");
-#endif
-
-	// sooo... I guess let's look at the features. FIXME: not considering  ~*
-	// ignore if is blank at start or end
-	if (!xFeatures.empty() && xFeatures.at(0) == 0) xFeatures.erase(xFeatures.begin());
-	if (!xFeatures.empty() && xFeatures.back() == 0) xFeatures.pop_back();
-	// if it is empty, just return a space 
-	if (xFeatures.empty()) return ' ';
-
-	// 1 --> |[]() \/ -_ <> 
-		// can do line of best fit, or just general tracking on how it moved from line to line -- left, right, or stay
-		// a high x width indicates a horixontal line (so maybe .3 and up)
-	if (xFeatures.size() == 1 && xFeatures.at(0) == 1) {
-
-		// if very low density but low avg y --> '
-		if (density < 0.1 && avgY < 0.1) return '\'';
-		// low density and high avg y --> .
-		if (density < 0.1 && avgY > 0.9) return '.';
-		//if high width or very few parts --> -_ (Snuck in lol)
-		if (xAvgWid > 0.3 || ((float)xCenters.size())/((float)ySize) < 0.1) {
-			if (avgY < 0.5) return '-';
-			else return '_';
-		}
-
-		// look through points and find line
-		int changes = 0;
-		int prevX = xCenters.front();
-		int curX;
-		int posParts, negParts, zerParts;
-		int prevSign = 0, curSign = 0;
-		int firstHalfDir = 0;
-		int secondHalfDir = 0;
-		posParts = negParts = zerParts = 0;
-		// NOTE: if this doesn't work well, consider just adding the raw change rather than the sign so large movements count for more. 
-		for (int k = 1; k < xCenters.size(); k++) {
-			curX = xCenters.at(k);
-			int dif = curX - prevX; //keeps the signs matching with positive (/) and negative (\) lines
-			if (dif > xSize/10) {
-				posParts++;
-				curSign = 1;
-			}
-			else if (dif < -xSize/10) {
-				negParts++;
-				curSign = -1;
-			}
-			else {
-				zerParts++;
-				curSign = 0;
-			}
-
-			if (k < xCenters.size() / 2) firstHalfDir += curSign;
-			else secondHalfDir += curSign;
-
-			if (prevSign != curSign) changes++;
-			prevX = curX;
-			prevSign = curSign;
-		}
-		float percPosParts = ((float)posParts) / ((float)xCenters.size()-1);
-		float percNegParts = ((float)negParts) / ((float)xCenters.size()-1);
-		float percZerParts = ((float)zerParts) / ((float)xCenters.size()-1);
-#ifdef DEBUG_MODE
-		printf("pos:    %f\nneg:    %f\nzero:  %f\n", percPosParts, percNegParts, percZerParts);
-#endif
-		if (changes == 0 || percZerParts > 0.8) return '|'; // stayed |
-		if (percPosParts > 0.7) return '\\';
-		if (percNegParts > 0.7) return '/';
-		if (firstHalfDir > 0 && secondHalfDir < 0) return '>';
-		if (firstHalfDir < 0 && secondHalfDir > 0) return '<';
-
-		// TODO: if we end up considering magnitude, maybe try tracking of sharp, big changes or gentle.
-		// curved higher lower --> )
-		// curved lower higher --> (
-	
-		// if very low avg x --> [
-		//if (avgX < 0.2) return '[';
-		//if (avgX > 0.8) return ']';
-		// if all else fails, just do the normal line
-		return '|';
-	}
-	// some mix of horiz and one chunks, and is wide --> -_   (maybe ~ belongs here)
-	if (xAvgWid > 0.3 && (xFeatures.at(0) == 3 || xFeatures.at(0) == 1) && (xFeatures.size() < 2 || (xFeatures.at(1) == 3 || xFeatures.at(1) == 1)) && 
-		(xFeatures.size() < 3 || (xFeatures.at(2) == 3 || xFeatures.at(2) == 1)) ) {
-		//if high width --> -_... Snuck in lol
-		if (avgY < 0.5) return '-';
-			else return '_';
-	}
-	// 131 --> +
-	if (xFeatures.size() == 3 && xFeatures.at(0) == 1 && xFeatures.at(1) == 3 && xFeatures.at(2) == 1) return '+';
-	// 101 --> = or :
-	if (xFeatures.size() == 3 && xFeatures.at(0) == 1 && xFeatures.at(2) == 0 && xFeatures.at(2) == 1) {
-		if (xAvgWid > 0.3) return '=';
-		else return ':';
-	}
-	// 121 --> 0 or o, depends on avg y
-	if (xFeatures.size() == 3 && xFeatures.at(0) == 1 && xFeatures.at(2) == 2 && xFeatures.at(2) == 1) {
-		if (avgY > 0.5) return 'o';
-		else return 'O';
-	}
-	// 212 --> X
-	if (xFeatures.size() == 3 && xFeatures.at(0) == 2 && xFeatures.at(1) == 1 && xFeatures.at(2) == 2) return '+';
-	//21 --> U or V (depends on sharpness/thickness)
-	if (xFeatures.size() == 2 && xFeatures.at(0) == 2 && xFeatures.at(1) == 1) {
-		if (xAvgWid > 0.1) return 'U';
-		else return 'V';
-	}
-	//12 --> ^
-	if (xFeatures.size() == 2 && xFeatures.at(0) == 1 && xFeatures.at(1) == 2) return '^';
-	// if junk but dense, #
-	if(density > 0.5) return '#';
-	// who knows... find a char that always looks good later lol
-	return '?';
 }
 
 // TODO: Try an actual machine learning option -- use either feature recognition, ascii recognition if it has it, or even train my own if I can
@@ -329,7 +90,7 @@ static void linesToAscii() {
 #ifdef DEBUG_MODE
 	printf("    0    5    10   15   20   25   30   35   40   45   50\n");
 #endif
-	// NOTE: Unlike the line methods, i is Y and j is X... FIXME: swap them, this confusesme repeatedly
+	// NOTE: Unlike the line methods, i is Y and j is X... FIXME: swap them, this confuses me repeatedly
 	//for(int i = 13 ; i < 14 ; i++){ // to debug one chunk
 	for (int i = 0; i < ascHeight; i++) {
 #ifdef DEBUG_MODE
@@ -361,35 +122,7 @@ static void linesToAscii() {
 
 
 
-bool isWhite(int xMin, int xMax, int yMin, int yMax) {
-	float lit = 0;
-	float all = 0;
-	
-	// do some quick sanity checks
-	if (xMin >= detected_edges.cols) return false;
-	if (yMin >= detected_edges.rows) return false;
-	if (xMax > detected_edges.cols) xMax = detected_edges.cols;
-	if (yMax > detected_edges.rows) yMax = detected_edges.rows;
 
-	// perform the check
-	for (int x = xMin; x < xMax; x++) {
-		for (int y = yMin; y < yMax; y++) {
-			if (detected_edges.at<char>(y, x) != 0) {
-//				printf("#");
-				lit++;
-			}
-//			else printf(" ");
-			all++;
-		}
-//		printf("\n");
-	}
-//	printf("----------------------------");
-	// print even if just a single line
-	if (lit > 0) {
-//		printf("lit: %f out of %f --> %d\n", lit, all, (lit / all) >= (xMax - xMin) / all);
-	}
-	return (lit / all) >= (xMax-xMin)/all;
-}
 
 // uses a breadthfirst search to trace consecuative outlines. 
 // FIXME: tweak to read off of a double sized pixel grid and return the normal one
@@ -521,7 +254,16 @@ static void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant
 }
 
 
-// performs a breadth first search of the image broken up into squares, drawing lines to connect adjacent regions with white pixels
+/**************************************
+ * Image Processing *******************
+ **************************************/
+// these functions (well, function) use an ascii identification function convert a preprocessed image into ascii art 
+
+/* Divides the image up into regions to be handled by an ascii identification function. Prints out the final result 
+*/
+// FIXME: make it return the final array
+// FIXME: remove any printing done outside of debug mode
+// FIXME: remove reliance on globals
 static void outlineToAscii() {
 	// Create the grid for the art. Start with heigh and calculate the width
 	// TODO: look into how much this warps the image by rounding
@@ -536,7 +278,7 @@ static void outlineToAscii() {
 	int pixHeight = (detected_edges.rows / giantAscHeight) + 1;
 	int pixWidth = (detected_edges.cols / giantAscWidth) + 1;
 
-	// Now make a grid of that length (final) and double in both dimensions (frst pass)
+	// Now make a grid of that length (final) and double in both dimensions (first pass)
 	ascWidth++; // add an extra for the end lines
 	giantAscWidth++;
 	char * giantAsc = (char*)malloc(sizeof(char) * giantAscHeight * giantAscWidth);
@@ -570,6 +312,10 @@ static void outlineToAscii() {
 	free(ascArt);
 }
 
+/**************************************
+ * Opencv wrappers ********************
+ **************************************/
+// wrapper functions for the opencv library to make things simpler
 
 static void CannyThreshold(int, void*)
 {
@@ -580,6 +326,7 @@ static void CannyThreshold(int, void*)
 	outlineToAscii();
 }
 
+/* demoImage: display an image and allow users to tweak the settings so they know what to specify later */
 void demoImage(String fileName) {
 	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
 	if (src.empty())
