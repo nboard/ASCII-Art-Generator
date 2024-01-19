@@ -21,7 +21,7 @@ Mat demoSrcGray;
 Mat demoDetectedEdges;
 int demoLowThreshold;
 int demoRatio;
-int demoKernalSize;
+int demokernelSize;
 int demoAsciiHeight;
 
 /**************************************
@@ -67,59 +67,18 @@ bool isWhite(Mat detectedEdges, int xMin, int xMax, int yMin, int yMax) {
  **************************************/
 // These functions convert the pixels in a region into one ascii character
 
-// always returns the # character. Good to get rough outlines of images. Only good for huge images
-char constChar(int xMin, int xMax, int yMin, int yMax) {
-	return '#';
-}
-
 // TODO: Try an actual machine learning option -- use either feature recognition, ascii recognition if it has it, or even train my own if I can
 // TODO: a method that only looks for lines, just in a lot of detail (so handling up to like x^3 for ~ or something) could work well too. Perhaps HoughLinesP() -- returns a list of the lines found. So U would be like 3 lines?
 // TODO: find a better way of using convolution to replace the (removed) region matching 
+// TODO: implement a method that attempts to outline shapes based on the double sized input. 
+// TODO: add a simple method that just draws the image with a single character
 
-
-// uses a breadth-first search to trace consecutive outlines. 
-// FIXME: tweak to read off of a double sized pixel grid and return the normal one
-// FIXME: not used
-//static void breadthFirstTrace(char* result, int ascWidth, int ascHeight, int xStart, int pixWidth, int yStart, int pixHeight) {
-//	std::queue<std::pair<int, int>> pos;
-//
-//	// make sure the current space is not blank
-//	if (!isWhite(xStart * pixWidth, (xStart + 1) * pixWidth, yStart * pixHeight, (yStart + 1) * pixHeight)) {
-//		result[xStart + yStart * ascWidth] = ' ';
-//		return; // no line to trace
-//	}
-//
-//	pos.push(std::pair<int, int>(xStart, yStart));
-//
-//	while (!pos.empty()) {
-//		std::pair<int, int> cur = pos.front();
-//		// TODO: once this works, replace some stuff with macros to make things cleaner
-//
-//		// check all around
-//		// '\0' means unset, unchecked
-//		// '\1' means unset, checked
-//		// any other character is final, leave alone
-//		for (int xOff = -1; xOff <= 1; xOff++) {
-//			for (int yOff = -1; yOff <= 1; yOff++) {
-//				std::pair<int, int> temp = std::pair<int, int>(cur.first + xOff, cur.second + yOff);
-//				if (temp.first < 0 || temp.first >= ascWidth-1 || temp.second < 0 || temp.second >= ascHeight) continue; // invalid, ignore
-//				if (result[temp.first + temp.second * ascWidth] != '\n') continue; // was checked before at some point
-//				// is valid and was not checked. If is lit, mark and add. If unlit, make ' '
-//				if (isWhite(temp.first * pixWidth, (temp.first + 1) * pixWidth, temp.second * pixHeight, (temp.second + 1) * pixHeight)) {
-//					result[temp.first + temp.second * ascWidth] = 1;
-//					pos.push(temp);
-//				}
-//				else result[temp.first + temp.second * ascWidth] = ' ';
-//			}
-//		}
-//		// TODO: pick shape based on neighbors... (is 2^8 possibilities, but just check a few, mainly for /-\|. Some patterns may suggest should just skip)
-//			// if you want to get real fancy, could even consider whether there are pixels clustered in the 8 spots and only link with those where that is true (maybe too complex...?)
-//		result[cur.first + cur.second * ascWidth] = '#';
-//		pos.pop();
-//	}
-//}
-
-// scale the image down. Are just 16 possible items to translate (assumes 2x each dimension)
+/* simpleReplace: scale the image down. Are just 16 possible items to translate (assumes 2x each dimension)
+ * int ascHeight: the height of the final image in characters
+ * int ascWidth: the width of the final image in characters 
+ * char* result: the array to store the final result in
+ * char* giant: the array containing the scaled up version of the ascii art image
+ */
 static void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant) {
 	int giantAscWidth = ascWidth * 2 - 1;
 	int giantAscHeight = ascHeight * 2;
@@ -216,11 +175,10 @@ static void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant
  **************************************/
 // these functions (well, function) use an ascii identification function convert a preprocessed image into ascii art 
 
-/* Divides the image up into regions to be handled by an ascii identification function. Prints out the final result 
+/* outlineToAscii: Divides the image up into regions to be handled by an ascii identification function. Prints out the final result 
+ * Mat src: the image supplied by the user to be converted into ascii art
+ * int ascHeight: the targe height of the ascii art in characters
 */
-// FIXME: make it return the final array
-// FIXME: remove any printing done outside of debug mode
-// FIXME: remove reliance on globals
 static char * outlineToAscii(Mat src, int ascHeight) {
 	// Create the grid for the art. Start with heigh and calculate the width
 	// TODO: look into how much this warps the image by rounding
@@ -241,7 +199,7 @@ static char * outlineToAscii(Mat src, int ascHeight) {
 	char * giantAsc = (char*)malloc(sizeof(char) * giantAscHeight * giantAscWidth);
 	char* ascArt = (char*)malloc(sizeof(char) * ascHeight * ascWidth);
 	memset(giantAsc, '\0', (giantAscHeight * giantAscWidth));
-	memset(ascArt, '\0', ((int)ascHeight) * (ascWidth)); // TODO: figure out how to make this stop being so whiny
+	memset(ascArt, '\0', ((int)ascHeight) * (ascWidth));
 	
 	// perform first pass; create the 2x image
 	// note: for (x,y), (0,0) is the upper left, (1,1) is one right and one down, etc.
@@ -275,19 +233,30 @@ static char * outlineToAscii(Mat src, int ascHeight) {
  **************************************/
 // wrapper functions for the opencv library functions to make things simpler
 
-
+/* CannyThreshold: this is used for the demo to make it possible to have an interactive window.
+ * params are used only by the library; simply pass 0,0 when calling. 
+*/
 static void CannyThreshold(int, void*)
 {
 	if (demoBlurThreshold == 0) demoBlurThreshold = 1;
 	blur(demoSrcGray, demoDetectedEdges, Size(demoBlurThreshold, demoBlurThreshold));
-	Canny(demoDetectedEdges, demoDetectedEdges, demoLowThreshold, demoLowThreshold * demoRatio, demoKernalSize);
+	Canny(demoDetectedEdges, demoDetectedEdges, demoLowThreshold, demoLowThreshold * demoRatio, demokernelSize);
 	imshow(WINDOW_NAME, demoDetectedEdges);
 	//print the result
-	std::cout << outlineToAscii(demoDetectedEdges, demoAsciiHeight) << std::endl;
+	char * result = outlineToAscii(demoDetectedEdges, demoAsciiHeight);
+	std::cout << result << std::endl;
+	free(result);
 }
 
-/* demoImage: display an image and allow users to tweak the settings so they know what to specify later */
-void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernalSize, int ascHeight) {
+/* demoImage: display an image and allow users to tweak the settings so they know what to specify later 
+ * String fileName: path to the image supplied by the user
+ * int blurThreshold: parameter for image preprocessing
+ * int lowThreshold: parameter for image preprocessing
+ * int ratio: parameter for image preprocessing
+ * int kernelSize: parameter for image preprocessing
+ * int ascHeight: the target size for the final image in characters 
+*/
+void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight) {
 	Mat src, srcGray, detectedEdges;
 	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
 	if (src.empty())
@@ -305,7 +274,7 @@ void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, 
 	demoDetectedEdges = detectedEdges;
 	demoLowThreshold = lowThreshold;
 	demoRatio = ratio;
-	demoKernalSize = kernalSize;
+	demokernelSize = kernelSize;
 	demoAsciiHeight = ascHeight;
 
 	//show it off
@@ -319,8 +288,15 @@ void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, 
 	waitKey(0);
 }
 
-// convert an image to ascii and return the result as a character array
-char* convertImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernalSize, int ascHeight){
+/* convertImage: convert an image to ascii and return the result as a character array
+ * String fileName: path to the image supplied by the user
+ * int blurThreshold: parameter for image preprocessing
+ * int lowThreshold: parameter for image preprocessing
+ * int ratio: parameter for image preprocessing
+ * int kernelSize: parameter for image preprocessing
+ * int ascHeight: the target size for the final image in characters 
+*/
+char* convertImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight){
 	Mat src, srcGray, detectedEdges;
 	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
 	if (src.empty())
@@ -336,24 +312,10 @@ char* convertImage(String fileName, int blurThreshold, int lowThreshold, int rat
 	// process image
 	if (blurThreshold == 0) blurThreshold = 1;
 	blur(srcGray, detectedEdges, Size(blurThreshold, blurThreshold));
-	Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * ratio, kernalSize);
+	Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * ratio, kernelSize);
 	return outlineToAscii(detectedEdges, ascHeight);
 }
 
-
-//Mat src, src_gray;
-//Mat dst, detected_edges, white;
-//// demo vars need to be global (TODO: double check this)
-//int lowThreshold = 21;
-//int blurThreshold = 3;
-//int ascHeight = 20;
-
-
-//int ratio = 4;
-//const int kernel_size = 3;
-
-//
-//double lenWidRatio = 2.2; // how many character widths equal one character height (2.2 is my vs console)
 
 /* main function *************************************************************/
 // currently being used for testing. TODO: move to another file so this can more easily be used as a library
@@ -367,27 +329,59 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	
+	// set defaults and let args change if needed
 	bool isDemo = false;
+	String fileName = argv[1];
+	int blurThreshold = 3;
+	int lowThreshold = 21;
+	int ratio = 4;
+	int kernelSize = 3; 
+	int ascHeight = 20;
+
 	// iterate through args and set values accordingly
 	for(int i = 2 ; i < argc ; i++){
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")){
+		help:
 			// ignore everything else to print help message
-			std::cout << "Usage: " << argv[0] << " filename [-s heightSize] [-b blurThreshold] [-d] " << std::endl;
-			std:: cout << "this program converts images into ascii art. The first argument MUST be the filename.";
-			std:: cout << " Order of other arguments does not matter. " << std::endl;
+			std::cout << "Usage: " << argv[0] << " filename [-d] [-b blurThreshold] [-l lowThreshold] [-r ratio] [-k kernelSize] [-h asciiHeight]" << std::endl;
+			std::cout << "this program converts images into ascii art. The first argument MUST be the filename.";
+			std::cout << " Order of other arguments does not matter. " << std::endl;
+			std::cout << "	-d			Runs the program in demo mode" << std::endl;
+			std::cout << "	-b, --blur		Sets the blur threshold value" << std::endl;
+			std::cout << "	-l, --low		Sets the low threshold value" << std::endl;
+			std::cout << "	-r, --ratio		Sets the ratio value" << std::endl;
+			std::cout << "	-k, --kernel		Sets the kernel size value. Must be 3, 5, or 7" << std::endl;
+			std::cout << "	-c, --height		Sets the character height of the generated ascii art" << std::endl;
 			// TODO: detail everything as I add it... Just sets the default for demo, or actual for the normal.
 			return 0;
 		}
 		else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--demo")){
 			isDemo = true;
 		}
+		else if (!strcmp(argv[i], "-b") || !strcmp(argv[i], "--blur")){
+			blurThreshold = std::stoi(argv[++i]);
+			if(blurThreshold < 1 || blurThreshold > MAX_BLUR_THRESHOLD) goto help;
+		}
+		else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "--low")){
+			lowThreshold = std::stoi(argv[++i]);
+			if(lowThreshold < 1 || lowThreshold > MAX_LOW_THRESHOLD) goto help;
+		}else if (!strcmp(argv[i], "-r") || !strcmp(argv[i], "--ratio")){
+			ratio = std::stoi(argv[++i]);
+			if(ratio < 1 || ratio > MAX_RATIO) goto help;
+		}else if (!strcmp(argv[i], "-k") || !strcmp(argv[i], "--kernel")){
+			kernelSize = std::stoi(argv[++i]);
+			if(kernelSize != 3 && kernelSize != 5 && kernelSize != 7) goto help;
+		}else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--Height")){
+			ascHeight = std::stoi(argv[++i]);
+			if(ascHeight < 1 || ascHeight > MAX_ASCII_HEIGHT) goto help;
+		}
 	}
 
 	char * result;
 	// determine if should demo or not
-	if(isDemo) demoImage(argv[1], 3, 21, 4, 3, 20);
+	if(isDemo) demoImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
 	else{
-		result = convertImage(argv[1], 3, 21, 4, 3, 20);
+		result = convertImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
 		std::cout << result << std::endl;
 		free(result);
 	} 
