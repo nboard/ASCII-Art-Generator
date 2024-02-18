@@ -93,68 +93,68 @@ static void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant
 
 			// select character
 			switch (lit) {
-				case '\x00': // |  |
-							 // |  |
+				case '\x00':	// |  |
+						// |  |
 					result[x + y * ascWidth] = ' '; 
 					break;
-				case '\x01': // |# |
-							 // |  |
+				case '\x01':	// |# |
+						// |  |
 					result[x + y * ascWidth] = '`';
 					break;
-				case '\x02': // | #|
-							 // |  |
+				case '\x02':	// | #|
+						// |  |
 					result[x + y * ascWidth] = '\'';
 					break;
-				case '\x03': // |##|
-							 // |  |
+				case '\x03':	// |##|
+						// |  |
 					result[x + y * ascWidth] = '-';
 					break;
-				case '\x04': // |  |
-							 // |# |
+				case '\x04':	// |  |
+						// |# |
 					result[x + y * ascWidth] = '.';
 					break;
-				case '\x05': // |# |
-							 // |# |
+				case '\x05':	// |# |
+						// |# |
 					result[x + y * ascWidth] = '|';
 					break;
-				case '\x06': // | #|
-							 // |# |
+				case '\x06':	// | #|
+						// |# |
 					result[x + y * ascWidth] = '/';
 					break;
-				case '\x07': // |##|
-							 // |# |
-					result[x + y * ascWidth] = 'F';
+				case '\x07':	// |##|
+						// |# |
+					result[x + y * ascWidth] = '/';
 					break;
-				case '\x08': // |  |
-							 // | #|
+				case '\x08':	// |  |
+						// | #|
 					result[x + y * ascWidth] = '.';
 					break;
-				case '\x09': // |# |
-							 // | #|
+				case '\x09':	// |# |
+						// | #|
 					result[x + y * ascWidth] = '\\';
 					break;
-				case '\x0A': // | #|
-							 // | #|
+				case '\x0A':	// | #|
+						// | #|
 					result[x + y * ascWidth] = '|';
 					break;
-				case '\x0B': // |##|
-							 // | #|
-					result[x + y * ascWidth] = '7';
+				case '\x0B':	// |##|
+						// | #|
+					result[x + y * ascWidth] = '\\';
 					break;
-				case '\x0C': // |  |
-							 // |##|
+				case '\x0C':	// |  |
+						// |##|
 					result[x + y * ascWidth] = '_';
 					break;
-				case '\x0D': // |# |
-							 // |##|
+				case '\x0D':	// |# |
+						// |##|
 					result[x + y * ascWidth] = 'L';
 					break;
-				case '\x0E': // | #|
-							 // |##|
-					result[x + y * ascWidth] = 'j';
+				case '\x0E':	// | #|
+						// |##|
+					result[x + y * ascWidth] = '/';
 					break;
-				case '\x0F': // |##|
-							 // |##|
+				case '\x0F':	// |##|
+						// |##|
 					result[x + y * ascWidth] = '#';
 					break;
 			} // switch
@@ -248,14 +248,14 @@ static void CannyThreshold(int, void*)
 	free(result);
 }
 
-/* demoImage: display an image and allow users to tweak the settings so they know what to specify later 
- * String fileName: path to the image supplied by the user
- * int blurThreshold: parameter for image preprocessing
- * int lowThreshold: parameter for image preprocessing
- * int ratio: parameter for image preprocessing
- * int kernelSize: parameter for image preprocessing
- * int ascHeight: the target size for the final image in characters 
-*/
+/** demoImage: display an image and allow users to tweak the settings so they know what to specify later 
+ * fileName:		path to the image supplied by the user
+ * blurThreshold:	parameter for image preprocessing
+ * lowThreshold:	parameter for image preprocessing
+ * ratio:		parameter for image preprocessing
+ * kernelSize:		parameter for image preprocessing
+ * ascHeight:		the target size for the final image in characters 
+**/
 void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight) {
 	Mat src, srcGray, detectedEdges;
 	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
@@ -265,6 +265,8 @@ void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, 
 		std::cout << "Usage: " << "<THIS-FILE>" << " <Input image>" << std::endl;
 		return;
 	}
+	if(ascHeight < 1 ) ascHeight = 1;
+
 	//set up for processing
 	cvtColor(src, srcGray, COLOR_BGR2GRAY);
 
@@ -331,7 +333,7 @@ int main(int argc, char** argv)
 	
 	// set defaults and let args change if needed
 	bool isDemo = false;
-	String fileName = argv[1];
+	String fileName;
 	int blurThreshold = 3;
 	int lowThreshold = 21;
 	int ratio = 4;
@@ -339,7 +341,7 @@ int main(int argc, char** argv)
 	int ascHeight = 20;
 
 	// iterate through args and set values accordingly
-	for(int i = 2 ; i < argc ; i++){
+	for(int i = 1 ; i < argc ; i++){
 		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")){
 		help:
 			// ignore everything else to print help message
@@ -374,6 +376,9 @@ int main(int argc, char** argv)
 		}else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--Height")){
 			ascHeight = std::stoi(argv[++i]);
 			if(ascHeight < 1 || ascHeight > MAX_ASCII_HEIGHT) goto help;
+		}else{
+			// just assume it was the file name
+			fileName = argv[1];
 		}
 	}
 
