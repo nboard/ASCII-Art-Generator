@@ -5,16 +5,10 @@
 #include <utility> 
 #include <filesystem>
 #include <queue>
+#include "GenerateAscii.hpp"
 // #define DEBUG_MODE
 using namespace cv;
 
-// constants
-const double LEN_WID_RATIO 	= 2.2; // how many character widths equal one character height (2.2 is my vs console)
-const char* WINDOW_NAME 	= "Demo Mode";
-const int MAX_BLUR_THRESHOLD 	= 50;
-const int MAX_LOW_THRESHOLD	= 100;
-const int MAX_RATIO 		= 100;
-const int MAX_ASCII_HEIGHT	= 100;
 // globals for demo
 int demoBlurThreshold;
 Mat demoSrcGray;
@@ -79,7 +73,7 @@ bool isWhite(Mat detectedEdges, int xMin, int xMax, int yMin, int yMax) {
  * char* result: the array to store the final result in
  * char* giant: the array containing the scaled up version of the ascii art image
  */
-static void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant) {
+void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant) {
 	int giantAscWidth = ascWidth * 2 - 1;
 	int giantAscHeight = ascHeight * 2;
 	for (int y = 0; y < ascHeight; y++) {
@@ -179,7 +173,7 @@ static void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant
  * Mat src: the image supplied by the user to be converted into ascii art
  * int ascHeight: the targe height of the ascii art in characters
 */
-static char * outlineToAscii(Mat src, int ascHeight) {
+char * outlineToAscii(Mat src, int ascHeight) {
 	// Create the grid for the art. Start with heigh and calculate the width
 	// TODO: look into how much this warps the image by rounding
 	int ascWidth = (int)(LEN_WID_RATIO * (double)(ascHeight) * (((double)src.cols) / ((double)src.rows)));
@@ -236,9 +230,10 @@ static char * outlineToAscii(Mat src, int ascHeight) {
 /* CannyThreshold: this is used for the demo to make it possible to have an interactive window.
  * params are used only by the library; simply pass 0,0 when calling. 
 */
-static void CannyThreshold(int, void*)
+void CannyThreshold(int, void*)
 {
-	if (demoBlurThreshold == 0) demoBlurThreshold = 1;
+	if(demoAsciiHeight < 1 ) demoAsciiHeight = 1;
+	if (demoBlurThreshold < 1) demoBlurThreshold = 1;
 	blur(demoSrcGray, demoDetectedEdges, Size(demoBlurThreshold, demoBlurThreshold));
 	Canny(demoDetectedEdges, demoDetectedEdges, demoLowThreshold, demoLowThreshold * demoRatio, demokernelSize);
 	imshow(WINDOW_NAME, demoDetectedEdges);
@@ -265,7 +260,6 @@ void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, 
 		std::cout << "Usage: " << "<THIS-FILE>" << " <Input image>" << std::endl;
 		return;
 	}
-	if(ascHeight < 1 ) ascHeight = 1;
 
 	//set up for processing
 	cvtColor(src, srcGray, COLOR_BGR2GRAY);
@@ -316,79 +310,4 @@ char* convertImage(String fileName, int blurThreshold, int lowThreshold, int rat
 	blur(srcGray, detectedEdges, Size(blurThreshold, blurThreshold));
 	Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * ratio, kernelSize);
 	return outlineToAscii(detectedEdges, ascHeight);
-}
-
-
-/* main function *************************************************************/
-// currently being used for testing. TODO: move to another file so this can more easily be used as a library
-
-int main(int argc, char** argv)
-{
-
-	// for now, just focus on this
-	if(argc <= 1){
-		std::cout << "ERROR: please enter at least one image file to convert to ascii" << std::endl;
-		return -1;
-	}
-	
-	// set defaults and let args change if needed
-	bool isDemo = false;
-	String fileName;
-	int blurThreshold = 3;
-	int lowThreshold = 21;
-	int ratio = 4;
-	int kernelSize = 3; 
-	int ascHeight = 20;
-
-	// iterate through args and set values accordingly
-	for(int i = 1 ; i < argc ; i++){
-		if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")){
-		help:
-			// ignore everything else to print help message
-			std::cout << "Usage: " << argv[0] << " filename [-d] [-b blurThreshold] [-l lowThreshold] [-r ratio] [-k kernelSize] [-h asciiHeight]" << std::endl;
-			std::cout << "this program converts images into ascii art. The first argument MUST be the filename.";
-			std::cout << " Order of other arguments does not matter. " << std::endl;
-			std::cout << "	-d			Runs the program in demo mode" << std::endl;
-			std::cout << "	-b, --blur		Sets the blur threshold value" << std::endl;
-			std::cout << "	-l, --low		Sets the low threshold value" << std::endl;
-			std::cout << "	-r, --ratio		Sets the ratio value" << std::endl;
-			std::cout << "	-k, --kernel		Sets the kernel size value. Must be 3, 5, or 7" << std::endl;
-			std::cout << "	-c, --height		Sets the character height of the generated ascii art" << std::endl;
-			// TODO: detail everything as I add it... Just sets the default for demo, or actual for the normal.
-			return 0;
-		}
-		else if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--demo")){
-			isDemo = true;
-		}
-		else if (!strcmp(argv[i], "-b") || !strcmp(argv[i], "--blur")){
-			blurThreshold = std::stoi(argv[++i]);
-			if(blurThreshold < 1 || blurThreshold > MAX_BLUR_THRESHOLD) goto help;
-		}
-		else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "--low")){
-			lowThreshold = std::stoi(argv[++i]);
-			if(lowThreshold < 1 || lowThreshold > MAX_LOW_THRESHOLD) goto help;
-		}else if (!strcmp(argv[i], "-r") || !strcmp(argv[i], "--ratio")){
-			ratio = std::stoi(argv[++i]);
-			if(ratio < 1 || ratio > MAX_RATIO) goto help;
-		}else if (!strcmp(argv[i], "-k") || !strcmp(argv[i], "--kernel")){
-			kernelSize = std::stoi(argv[++i]);
-			if(kernelSize != 3 && kernelSize != 5 && kernelSize != 7) goto help;
-		}else if (!strcmp(argv[i], "-c") || !strcmp(argv[i], "--Height")){
-			ascHeight = std::stoi(argv[++i]);
-			if(ascHeight < 1 || ascHeight > MAX_ASCII_HEIGHT) goto help;
-		}else{
-			// just assume it was the file name
-			fileName = argv[1];
-		}
-	}
-
-	char * result;
-	// determine if should demo or not
-	if(isDemo) demoImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
-	else{
-		result = convertImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
-		std::cout << result << std::endl;
-		free(result);
-	} 
- 	return 0; 
 }
