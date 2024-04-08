@@ -33,7 +33,8 @@ int main(int argc, char** argv)
 			std::cout << "Usage: " << argv[0] << " filename [-d] [-b blurThreshold] [-l lowThreshold] [-r ratio] [-k kernelSize] [-h asciiHeight]" << std::endl;
 			std::cout << "this program converts images into ascii art. The first argument MUST be the filename.";
 			std::cout << " Order of other arguments does not matter. " << std::endl;
-			std::cout << "	-d			Runs the program in demo mode" << std::endl;
+			std::cout << "	-h, --help		Prints this message. Ignores all other args." << std::endl;
+			std::cout << "	-d, --demo		Runs the program in demo mode" << std::endl;
 			std::cout << "	-b, --blur		Sets the blur threshold value" << std::endl;
 			std::cout << "	-l, --low		Sets the low threshold value" << std::endl;
 			std::cout << "	-r, --ratio		Sets the ratio value" << std::endl;
@@ -63,7 +64,7 @@ int main(int argc, char** argv)
 			if(ascHeight < 1 || ascHeight > MAX_ASCII_HEIGHT) goto help;
 		}else{
 			// just assume it was the file name
-			fileName = argv[1];
+			fileName = argv[i];
 		}
 	}
 
