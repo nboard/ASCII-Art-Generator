@@ -9,6 +9,31 @@
 // #define DEBUG_MODE
 using namespace cv;
 
+/************************************************************************/
+/* ASCII Art Generator							*/
+/*									*/
+/* Copyright (C) 2024 Noah Board					*/
+/*									*/
+/* This program is free software: you can redistribute it and/or modify	*/
+/* it under the terms of the GNU General Public License as published by	*/
+/* the Free Software Foundation, either version 3 of the License, or	*/
+/* (at your option) any later version.					*/
+/*									*/
+/* This program is distributed in the hope that it will be useful, but	*/
+/* WITHOUT ANY WARRANTY; without even the implied warranty of		*/
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU	*/
+/* General Public License for more details.				*/
+/*									*/
+/* You should have received a copy of the GNU General Public License	*/
+/* along with this program. If not, see					*/
+/* <https://www.gnu.org/licenses/>.					*/
+/*									*/
+/* Author: Noah Board							*/
+/* Creation: 2023							*/
+/* Description: Implements the functionality for generating ascii art	*/
+/************************************************************************/
+
+
 // globals for demo
 int demoBlurThreshold;
 Mat demoSrcGray;
@@ -60,12 +85,6 @@ bool isWhite(Mat detectedEdges, int xMin, int xMax, int yMin, int yMax) {
  * Ascii Identification ***************
  **************************************/
 // These functions convert the pixels in a region into one ascii character
-
-// TODO: Try an actual machine learning option -- use either feature recognition, ascii recognition if it has it, or even train my own if I can
-// TODO: a method that only looks for lines, just in a lot of detail (so handling up to like x^3 for ~ or something) could work well too. Perhaps HoughLinesP() -- returns a list of the lines found. So U would be like 3 lines?
-// TODO: find a better way of using convolution to replace the (removed) region matching 
-// TODO: implement a method that attempts to outline shapes based on the double sized input. 
-// TODO: add a simple method that just draws the image with a single character
 
 /* simpleReplace: scale the image down. Are just 16 possible items to translate (assumes 2x each dimension)
  * int ascHeight: the height of the final image in characters

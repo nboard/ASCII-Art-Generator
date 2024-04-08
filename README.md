@@ -108,7 +108,7 @@ Notably, more photo realistic images are hard for opencv's line trace to parse, 
 The bulk of the functionality of the program comes from the GenerateAscii.cpp and .h files. The main.cpp file only handles command line interaction. Therefore, including this functionality in another project should be as simple as including the two GenerateAscii files and calling the desired functions. 
 
 ### License
-This project uses the GPL 3 license. I added the license to make it clear that I am more than happy for people to use or modify the code I write. While I have a hard time imagining many (if any) people actually using this for anything, let me know if the license prevents you from doing something you would like to do with it, and I'll look into trying to help. 
+This project uses the GPL 3 license. I added the license to make it clear that I am more than happy for people to use or modify the project. While I have a hard time imagining many (if any) people actually using this for anything, let me know if the license prevents you from doing something you would like to do with it, and I'll look into trying to help. 
 
 ### On the programming style
 Although this project is written in C++ (in large part because that is one of the languages the opencv library is available in), it is programmed more like a C program. This is simply because I wanted more practice with C programming, though I do take advantage of some features of C++. My apologies in advance to anyone who tries to read or edit the code.
