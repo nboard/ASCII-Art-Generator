@@ -4,14 +4,14 @@ This project converts images into ASCII art.
 ## Purpose
 Most existing image-to-ASCII-art projects I have seen use the relative brightness of images to create their results. These have their charms, but are very dissimilar to handmade ASCII art, which typically outlines images, creating a result similar to a simple sketch. 
 
-I was inspired by Junferno's youtube video ["How I animate stuff on Desmos Graphing Calculator"](https://www.youtube.com/watch?v=BQvBq3K50u8) to use opencv's library to produce an outline, which then can be used as a starting point for creating ASCII art which more closely mimics a handmade style. 
+I was inspired by Junferno's YouTube video ["How I animate stuff on Desmos Graphing Calculator"](https://www.youtube.com/watch?v=BQvBq3K50u8) to use OpenCV’s library to produce an outline, which then can be used as a starting point for creating ASCII art which more closely mimics a handmade style. 
 
-The current aproach is relatively simple, but produces reasonable results - provided that the opencv library is able to produce a clear outline. The resulting images would likely benefit signifcantly from being touched up by hand. 
+The current approach is relatively simple, but produces reasonable results - provided that the OpenCV library is able to produce a clear outline. The resulting images would likely benefit significantly from being touched up by hand. 
 
 ## Running the Project
 With the open CV library installed, run the following command to build it: 
 
-`g++ main.cpp GenerateASCII.cpp  -I <path-to-open-cv-install>/include/opencv4 -L <path-to-open-cv-install>/lib  -l opencv_core -l opencv_imgcodecs -l opencv_highgui -l opencv_imgproc`
+`g++ main.cpp GenerateAscii.cpp  -I <path-to-open-cv-install>/include/opencv4 -L <path-to-open-cv-install>/lib  -l opencv_core -l opencv_imgcodecs -l opencv_highgui -l opencv_imgproc`
 
 Then, simply run the a.out file followed by a path to the image you would like to convert. 
 
@@ -108,7 +108,7 @@ Notably, more photo realistic images are hard for opencv's line trace to parse, 
 The bulk of the functionality of the program comes from the GenerateAscii.cpp and .h files. The main.cpp file only handles command line interaction. Therefore, including this functionality in another project should be as simple as including the two GenerateAscii files and calling the desired functions. 
 
 ### License
-This project uses the GPL 3 license. I added the license to make it clear that I am more than happy for people to use or modify the project. While I have a hard time imagining many (if any) people actually using this for anything, let me know if the license prevents you from doing something you would like to do with it, and I'll look into trying to help. 
+This project uses the GPL 3 license. I added the license to make it clear that I am more than happy for people to use or modify the project. While I have a hard time imagining many (if any) people actually using this for anything, let me know if the license prevents you from doing something you would like to do with it, and I'll look into trying to help.
 
 ### On the programming style
-Although this project is written in C++ (in large part because that is one of the languages the opencv library is available in), it is programmed more like a C program. This is simply because I wanted more practice with C programming, though I do take advantage of some features of C++. My apologies in advance to anyone who tries to read or edit the code.
+Although this project is written in C++ (in large part because that is one of the languages the opencv library is available in), it is sometimes programmed more like a C program. This is simply because I wanted more practice with C programming style, though I do take advantage of some features of C++. My apologies in advance to anyone who tries to read or edit the code.
