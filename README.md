@@ -44,7 +44,8 @@ The current algorithm essentially works by tracing the boundaries between colors
 ### Example
 The following is an example from start to finish of how this project can be used to produce ASCII art. Consider the following image:
 
-![Snoopy](https://en.wikipedia.org/wiki/File:Snoopy_Peanuts.png)
+![Snoopy](https://upload.wikimedia.org/wikipedia/en/5/53/Snoopy_Peanuts.png)
+
 Credit: wikipedia
 
 This is an ideal candidate because of its clear, simple lines. When run through open cv, the following is produced: 
@@ -74,7 +75,8 @@ Notice how messy the resulting outline is. This is reflected in the produced ASC
               ----\##########---          
 
 Tweaking with the results we can produce the following:
-![A blurry outline](images/snoopy_linesClean.PNG)
+
+![A clean outline](images/snoopy_linesClean.PNG)
 
 This generates the following ASCII art as well: 
                                           
@@ -104,7 +106,7 @@ Once the ideal paramaters have been found with the demo mode, they can be passed
 
 Notably, more photo realistic images are hard for opencv's line trace to parse, and thus poorer results are generated. 
 
-### Inclusion in other projects:
+### Inclusion in other projects
 The bulk of the functionality of the program comes from the GenerateAscii.cpp and .h files. The main.cpp file only handles command line interaction. Therefore, including this functionality in another project should be as simple as including the two GenerateAscii files and calling the desired functions. 
 
 ### License
