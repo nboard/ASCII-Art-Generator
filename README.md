@@ -112,5 +112,7 @@ The bulk of the functionality of the program comes from the GenerateAscii.cpp an
 ### License
 This project uses the GPL 3 license. I added the license to make it clear that I am more than happy for people to use or modify the project. While I have a hard time imagining many (if any) people actually using this for anything, let me know if the license prevents you from doing something you would like to do with it, and I'll look into trying to help.
 
+This project relies heavily on functionality from the OpenCV library, which is licensed under the Apache 2.0 license. A copy of the license can be found in the lib-license folder.
+
 ### On the programming style
 Although this project is written in C++ (in large part because that is one of the languages the opencv library is available in), it is sometimes programmed more like a C program. This is simply because I wanted more practice with C programming style, though I do take advantage of some features of C++. My apologies in advance to anyone who tries to read or edit the code.

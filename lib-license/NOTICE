@@ -1,0 +1,8 @@
+# Notice of licenses used by libraries in this project
+
+This project uses a library released under the Apache 2.0 license. In order to respect and properly attribute this and any other future licenses, the relevant information is listed below. 
+
+## OpenCV Library
+This project uses functionality from the OpenCV library, created by the OpenCV team (https://opencv.org/)
+
+OpenCV is licensed under the Apache 2.0 license. A copy of this license should be included with this software. If not, visit http://www.apache.org/licenses/ for a copy of the license.
