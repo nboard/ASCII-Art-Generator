@@ -1,4 +1,5 @@
 #include "opencv2/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include <iostream>
 #include <vector>
@@ -35,6 +36,7 @@ using namespace cv;
 
 
 // globals for demo
+// Canny Edge Detection
 int demoBlurThreshold;
 Mat demoSrcGray;
 Mat demoDetectedEdges;
@@ -42,6 +44,12 @@ int demoLowThreshold;
 int demoRatio;
 int demokernelSize;
 int demoAsciiHeight;
+// Difference of Gaussians 
+int demoKernalSize1;
+int demoKernalSize2;
+int demoMedianBlurSize;
+int demoPixelThreshold;
+
 
 /**************************************
  * Helper Functions *******************
@@ -241,6 +249,9 @@ char * outlineToAscii(Mat src, int ascHeight) {
 	return ascArt;
 }
 
+// TODO: use the Sobel Filter to get angles on curves. 
+// May want to add "difference of gausians" as a preprocess step
+
 /**************************************
  * Opencv wrappers ********************
  **************************************/
@@ -255,14 +266,57 @@ void CannyThreshold(int, void*)
 	if (demoBlurThreshold < 1) demoBlurThreshold = 1;
 	blur(demoSrcGray, demoDetectedEdges, Size(demoBlurThreshold, demoBlurThreshold));
 	Canny(demoDetectedEdges, demoDetectedEdges, demoLowThreshold, demoLowThreshold * demoRatio, demokernelSize);
-	imshow(WINDOW_NAME, demoDetectedEdges);
+	imshow(WINDOW_NAME_C, demoDetectedEdges);
 	//print the result
 	char * result = outlineToAscii(demoDetectedEdges, demoAsciiHeight);
 	std::cout << result << std::endl;
 	free(result);
 }
 
-/** demoImage: display an image and allow users to tweak the settings so they know what to specify later 
+
+/* diffOfGaussians: this is used for the demo to make it possible to have an interactive window.
+ * params are used only by the library; simply pass 0,0 when calling. 
+*/
+void diffOfGaussians(int, void*){
+	Mat gaus1, gaus2, medBlur;
+
+	// copy image so can make changes without affecting original
+	demoDetectedEdges = demoSrcGray.clone();
+
+	// correct input values
+	if(!(demoKernalSize1&1)) demoKernalSize1+=1;
+	if(!(demoKernalSize2&1)) demoKernalSize2+=1;
+	if(!(demoMedianBlurSize&1)) demoMedianBlurSize+=1;
+	if(!(demoPixelThreshold&1)) demoPixelThreshold+=1;
+
+	// blur first to help
+	medianBlur(demoDetectedEdges, medBlur, demoMedianBlurSize);
+
+	// perform edge detection
+	GaussianBlur(medBlur, gaus1, Size(demoKernalSize1,demoKernalSize1), 0);
+	GaussianBlur(medBlur, gaus2, Size(demoKernalSize2,demoKernalSize2), 0);
+	demoDetectedEdges = gaus1 - gaus2;
+
+	//now brighten everything past the threshold and delete the rest
+	Mat mask;
+	inRange(demoDetectedEdges, Scalar(demoPixelThreshold, demoPixelThreshold, demoPixelThreshold), 
+		Scalar(255, 255, 255), mask);
+	demoDetectedEdges.setTo(Scalar(255, 255, 255), mask);
+	inRange(demoDetectedEdges, Scalar(0, 0, 0), 
+		Scalar(demoPixelThreshold, demoPixelThreshold, demoPixelThreshold), mask);
+	demoDetectedEdges.setTo(Scalar(0, 0, 0), mask);
+
+	// update demo window
+	imshow(WINDOW_NAME_G, demoDetectedEdges);
+
+	// print the result
+	char * result = outlineToAscii(demoDetectedEdges, demoAsciiHeight);
+	std::cout << result << std::endl;
+	free(result);
+	}
+
+/** demoCannyImage: display an image and allow users to tweak the settings for canny edge detection 
+ * so they know what to specify later 
  * fileName:		path to the image supplied by the user
  * blurThreshold:	parameter for image preprocessing
  * lowThreshold:	parameter for image preprocessing
@@ -270,7 +324,7 @@ void CannyThreshold(int, void*)
  * kernelSize:		parameter for image preprocessing
  * ascHeight:		the target size for the final image in characters 
 **/
-void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight) {
+void demoCannyImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight) {
 	Mat src, srcGray, detectedEdges;
 	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
 	if (src.empty())
@@ -284,8 +338,8 @@ void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, 
 	cvtColor(src, srcGray, COLOR_BGR2GRAY);
 
 	//init demo's global values
-	demoBlurThreshold = blurThreshold;
 	demoSrcGray = srcGray;
+	demoBlurThreshold = blurThreshold;
 	demoDetectedEdges = detectedEdges;
 	demoLowThreshold = lowThreshold;
 	demoRatio = ratio;
@@ -293,15 +347,59 @@ void demoImage(String fileName, int blurThreshold, int lowThreshold, int ratio, 
 	demoAsciiHeight = ascHeight;
 
 	//show it off
-	namedWindow(WINDOW_NAME, WINDOW_NORMAL);
-	createTrackbar("Min Threshold:", WINDOW_NAME, &demoLowThreshold, MAX_LOW_THRESHOLD, CannyThreshold);
-	createTrackbar("Blur Threshold:", WINDOW_NAME, &demoBlurThreshold, MAX_BLUR_THRESHOLD, CannyThreshold);
-	createTrackbar("ratio:", WINDOW_NAME, &demoRatio, MAX_RATIO, CannyThreshold);
-	createTrackbar("size:", WINDOW_NAME, &demoAsciiHeight, MAX_ASCII_HEIGHT, CannyThreshold);
+	namedWindow(WINDOW_NAME_C, WINDOW_NORMAL);
+	createTrackbar("Min Threshold:", WINDOW_NAME_C, &demoLowThreshold, MAX_LOW_THRESHOLD, CannyThreshold);
+	createTrackbar("Blur Threshold:", WINDOW_NAME_C, &demoBlurThreshold, MAX_BLUR_THRESHOLD, CannyThreshold);
+	createTrackbar("ratio:", WINDOW_NAME_C, &demoRatio, MAX_RATIO, CannyThreshold);
+	createTrackbar("size:", WINDOW_NAME_C, &demoAsciiHeight, MAX_ASCII_HEIGHT, CannyThreshold);
 	CannyThreshold(0, 0);
 
 	waitKey(0);
 }
+
+/** demoCannyImage: display an image and allow users to tweak the settings for canny edge detection 
+ * so they know what to specify later 
+ * fileName:		path to the image supplied by the user
+ * blurThreshold:	parameter for image preprocessing
+ * lowThreshold:	parameter for image preprocessing
+ * ratio:		parameter for image preprocessing
+ * kernelSize:		parameter for image preprocessing
+ * ascHeight:		the target size for the final image in characters 
+**/
+void demoGaussImage(String fileName, int kernalSize1, int kernalSize2, int medianBlurSize, int pixelThreshold, int ascHeight){
+	Mat src, srcGray, detectedEdges;
+	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
+	if (src.empty())
+	{
+		std::cout << "Could not open or find the image!\n" << std::endl;
+		std::cout << "Usage: " << "<THIS-FILE>" << " <Input image>" << std::endl;
+		return;
+	}
+
+	//set up for processing
+	cvtColor(src, srcGray, COLOR_BGR2GRAY);
+
+	//init demo's global values
+	demoSrcGray = srcGray;
+	demoKernalSize1 = kernalSize1;
+	demoKernalSize2 = kernalSize2;
+	demoDetectedEdges = detectedEdges;
+	demoMedianBlurSize = medianBlurSize;
+	demoPixelThreshold = pixelThreshold;
+	demoAsciiHeight = ascHeight;
+	
+	// show off gaussian 
+	namedWindow(WINDOW_NAME_G, WINDOW_NORMAL);
+	createTrackbar("Median Blur:", WINDOW_NAME_G, &demoMedianBlurSize, MAX_MEDIAN_BLUR_SIZE, diffOfGaussians);
+	createTrackbar("Gauss 1:", WINDOW_NAME_G, &demoKernalSize1, MAX_KERNAL_SIZE_1, diffOfGaussians);
+	createTrackbar("Gauss 2:", WINDOW_NAME_G, &demoKernalSize2, MAX_KERNAL_SIZE_2, diffOfGaussians);
+	createTrackbar("Brightness Threshold:", WINDOW_NAME_G, &demoPixelThreshold, MAX_PIXEL_THRESHOLD, diffOfGaussians);
+	createTrackbar("size:", WINDOW_NAME_G, &demoAsciiHeight, MAX_ASCII_HEIGHT, diffOfGaussians);
+	diffOfGaussians(0, 0);
+
+	waitKey(0);
+}
+
 
 /* convertImage: convert an image to ascii and return the result as a character array
  * String fileName: path to the image supplied by the user
