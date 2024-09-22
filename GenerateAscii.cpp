@@ -6,6 +6,7 @@
 #include <utility> 
 #include <filesystem>
 #include <queue>
+#include <cmath>
 #include "GenerateAscii.hpp"
 // #define DEBUG_MODE
 using namespace cv;
@@ -89,12 +90,51 @@ bool isWhite(Mat detectedEdges, int xMin, int xMax, int yMin, int yMax) {
 	return (lit / all) >= (xMax-xMin)/all;
 }
 
+/* averageAngle: Calculates the average angle in degrees inside a region of an angle vector.
+ * The function ignores any angle marked as 0 (as this likely indicates there was no line)
+ * This function treats equiilent lines as the same (say, 90 and 270), so the returned value
+ * 	is always in the range [0, 180)
+ * args:
+ *	Mat angle: an image madeup of the angles calculated from the outline (assumes float)
+ *	int xMin: minimum x pixel coordinate to check
+ *	int xMax: maximum x pixel coordinate to check
+ *	int yMin: minimum y pixel coordinate to check
+ *	int yMax: maximum y pixel coordinate to check
+*/ 
+int averageAngle(Mat angle, int xMin, int xMax, int yMin, int yMax) {
+	// find average of angles. Check bounds first
+
+	if (xMin >= angle.cols) return -1;
+	if (yMin >= angle.rows) return -1;
+	if (xMax > angle.cols) xMax = angle.cols;
+	if (yMax > angle.rows) yMax = angle.rows;
+
+	long sum = 0;
+	int cnt = 0;
+	for (int x = xMin; x < xMax; x++) {
+		for (int y = yMin; y < yMax; y++) {
+			if(angle.at<float>(y, x) > 0){
+				float raw = angle.at<float>(y, x);
+				// don't need accuracy, and need to treat angles that creat the same line as equivilent
+				int angle = ((int) (raw + .5)) % 180;
+				sum += angle; 
+				cnt++;
+			}
+		}
+	}
+	float total = (xMax - xMin + 1)*(yMax - yMin + 1);
+	// skip blank or mostly blank areas
+	if(cnt == 0) return -1; //|| (cnt/total) < ((xMax - xMin)/total)) return -1;
+	return (int) sum/cnt;
+}
+
 /**************************************
  * Ascii Identification ***************
  **************************************/
 // These functions convert the pixels in a region into one ascii character
 
-/* simpleReplace: scale the image down. Are just 16 possible items to translate (assumes 2x each dimension)
+/* simpleReplace: scale the image down. There are just 16 possible items to translate 
+ * NOTE: assumes 2x each dimension for the source array
  * int ascHeight: the height of the final image in characters
  * int ascWidth: the width of the final image in characters 
  * char* result: the array to store the final result in
@@ -194,11 +234,11 @@ void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant) {
 /**************************************
  * Image Processing *******************
  **************************************/
-// these functions (well, function) use an ascii identification function convert a preprocessed image into ascii art 
+// these functions use an ascii identification function convert a preprocessed image into ascii art 
 
 /* outlineToAscii: Divides the image up into regions to be handled by an ascii identification function. Prints out the final result 
- * Mat src: the image supplied by the user to be converted into ascii art
- * int ascHeight: the targe height of the ascii art in characters
+ * Mat src:		the image supplied by the user to be converted into ascii art
+ * int ascHeight:	the height of the ascii art in characters
 */
 char * outlineToAscii(Mat src, int ascHeight) {
 	// Create the grid for the art. Start with heigh and calculate the width
@@ -209,8 +249,6 @@ char * outlineToAscii(Mat src, int ascHeight) {
 
 	// figure out how many pixels to each character -- use double width and double height.
 	// Add to the pixel width to be sure all lines are seen, and then be careful not to read nonexistant pixels later
-	//int pixHeight = (detected_edges.rows / ascHeight) + 1;
-	//int pixWidth = (detected_edges.cols / ascWidth) + 1; 
 	int pixHeight = (src.rows / giantAscHeight) + 1;
 	int pixWidth = (src.cols / giantAscWidth) + 1;
 
@@ -249,8 +287,65 @@ char * outlineToAscii(Mat src, int ascHeight) {
 	return ascArt;
 }
 
-// TODO: use the Sobel Filter to get angles on curves. 
-// May want to add "difference of gausians" as a preprocess step
+/* sobelToAscii: Uses the Sobel filter to transform an image into the angles of the outlines. 
+ *	These are then transformed into ascii art.
+ * Mat src:		the image supplied by the user to be converted into ascii art
+ * int ascHeight:	the height of the ascii art in characters
+*/
+char * sobelToAscii(Mat src, int ascHeight) {
+// Create the grid for the art. Start with heigh and calculate the width
+	// TODO: look into how much this warps the image by rounding
+	int ascWidth = (int)(LEN_WID_RATIO * (double)(ascHeight) * (((double)src.cols) / ((double)src.rows)));
+
+	// figure out how many pixels to each character
+	// Add to the pixel width to be sure all lines are seen, and then be careful not to read nonexistant pixels later
+	int pixHeight = (src.rows / ascHeight) + 1;
+	int pixWidth = (src.cols / ascWidth) + 1;
+
+	// Now make a grid of those dimensions
+	ascWidth++; // add an extra for the end lines
+	char* ascArt = (char*)malloc(sizeof(char) * ascHeight * ascWidth);
+	memset(ascArt, '\0', ((int)ascHeight) * (ascWidth));
+	
+	// need to run spatialGradient() to get x and y. Then for each pixel, run arctan. Then average angles for each region, then angle -> asciii
+	// later, want to do maybe quarter regions to help spot ^v<>, and maybe even ()UnO
+
+	Mat xSobel, ySobel, angle;
+	//src.convertTo(src, CV_32FC1);
+	Sobel(src, xSobel, 5, 1, 0, 1);
+	Sobel(src, ySobel, 5, 0, 1, 1);
+	phase(xSobel, ySobel, angle, true);
+
+	for (int y = 0; y < ascHeight; y++) {
+		for (int x = 0; x < ascWidth - 1 ; x++) {
+			int avg = averageAngle(angle, x*pixWidth, (x + 1) * pixWidth, y*pixHeight, (y+1)*pixHeight);
+			//printf("%d, ", avg);
+			if(avg < 0) {
+				ascArt[x + y * ascWidth] = ' '; // blank
+				continue;
+			} 
+			// Note: sobel defiens 0 as up
+			if(avg <= 22.5 || avg > 157.5) ascArt[x + y * ascWidth] = '|';
+			else if(avg <=  67.5) ascArt[x + y * ascWidth] = '/';
+			else if(avg <= 112.5) ascArt[x + y * ascWidth] = '-';
+			else if(avg <= 157.5) ascArt[x + y * ascWidth] = '\\';
+		}
+		ascArt[(y + 1) * ascWidth - 1] = '\n';
+		//printf("\n");
+	}
+	//printf("\n\n--------------------------------------------------------------------------\n");
+	//printf("##########################################################################\n");
+	//printf("--------------------------------------------------------------------------\n\n\n");
+	//std::cout << angle << std::endl;
+	ascArt[ascHeight * ascWidth - 1] = '\0'; // this replaces the last endline with an eof
+	#ifdef DEBUG_MODE
+		printf("%s\n", (char*)ascArt);
+	#endif
+
+	return ascArt;
+}
+
+// TODO: make a line follow algorithm that just tries to link up adjacent "lit" areas
 
 /**************************************
  * Opencv wrappers ********************
