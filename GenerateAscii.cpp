@@ -230,6 +230,88 @@ void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant) {
 	#endif
 }
 
+/* angleReplace: scale the image down based on combinations of lines. 
+ * NOTE: assumes 2x each dimension for the source array
+ * int ascHeight: the height of the final image in characters
+ * int ascWidth: the width of the final image in characters 
+ * char* result: the array to store the final result in
+ * char* source: the array containing the scaled up version of the ascii art image
+ */
+void angleReplace(int ascHeight, int ascWidth, char* result, int* source) {
+	int dblWidth = ascWidth * 2 - 1;
+	int dblHeight = ascHeight * 2;
+	for (int y = 0; y < ascHeight; y++) {
+		for (int x = 0; x < ascWidth - 1; x++) {
+			// get the four values:	|a1|b1|
+			//			|a2|b2|
+			int square = 0;
+			int a1 =  source[(2 * x)	+ (2 * y)	* dblWidth];
+			int b1 =  source[(2 * x + 1)	+ (2 * y)	* dblWidth];
+			int a2 =  source[(2 * x)	+ (2 * y + 1)	* dblWidth];
+			int b2 =  source[(2 * x + 1)	+ (2 * y + 1)	* dblWidth];
+
+			int avg = -1; // throws off by 1, but lets all 0 cases be detected
+			int cnt = 0;
+			if(a1 >= 0){ avg += a1; cnt++; }
+			if(b1 >= 0){ avg += b1; cnt++; }
+			if(a2 >= 0){ avg += a2; cnt++; }
+			if(b2 >= 0){ avg += b2; cnt++; }
+			if(cnt > 0) avg /= cnt;
+
+
+			// if all else fails, just use average angle
+			if(cnt == 0) result[x + y * ascWidth] = ' ';
+			else if(avg <= 22.5 || avg > 157.5) result[x + y * ascWidth] = '|';
+			else if(avg <=  67.5) result[x + y * ascWidth] = '/';
+			else if(avg <= 112.5) result[x + y * ascWidth] = '-';
+			else if(avg <= 157.5) result[x + y * ascWidth] = '\\';
+
+			// if all 4 average to something, or is just one, the last stage will handle it
+
+
+
+			//square |= a1 << 3*8;
+			//square |= b1 << 2*8;
+			//square |= a1 << 1*8;
+			//square |= b1 << 0*8;
+
+			// find cases for =_-'`"".:/\|LT()[]Vv^<>nUhX#Y
+
+			// check for 
+
+			// check for specific cases 
+			//if (a1 == '/' && b1 == '/' && a2 == ' ' && b2 == ' ')	// //
+			//	result[x + y * ascWidth] = '/';			//   
+			//if (a1 == '/' && b1 == '/' && a2 == ' ' && b2 == ' ')	// //
+			//	result[x + y * ascWidth] = '/';			//   
+
+			//// general catch-alls
+			//else if(a1 == b1 && a1 == a2 && a1 == b2)
+			//	result[x + y * ascWidth] = a1;
+			//else if (b1 == ' ' && a2 == ' ' && b2 == ' ')		// * 
+			//	result[x + y * ascWidth] = '`';			//   
+			//else if (a1 == ' ' && a2 == ' ' && b2 == ' ')		//  *
+			//	result[x + y * ascWidth] = '\'';		//   
+			//else if (a1 == ' ' && b1 == ' ' && b2 == ' ')		//   
+			//	result[x + y * ascWidth] = '.';			// * 
+			//else if (a1 == ' ' && b1 == ' ' && a2 == ' ')		//   
+			//	result[x + y * ascWidth] = '.';			//  *
+			/// TODO:  if all else fails, just redo the angle calculation
+			//else result[x + y * ascWidth] = '?'; 
+			
+
+		} // for x
+		result[(y + 1) * ascWidth - 1] = '\n';
+	} // for y
+
+	result[ascHeight * ascWidth - 1] = '\0';
+
+	#ifdef DEBUG_MODE
+		printf("%s\n", (char*)result);
+	#endif
+}
+
+
 
 /**************************************
  * Image Processing *******************
@@ -296,16 +378,21 @@ char * sobelToAscii(Mat src, int ascHeight) {
 // Create the grid for the art. Start with heigh and calculate the width
 	// TODO: look into how much this warps the image by rounding
 	int ascWidth = (int)(LEN_WID_RATIO * (double)(ascHeight) * (((double)src.cols) / ((double)src.rows)));
+	int dblWidth = ascWidth * 2;
+	int dblHeight = ascHeight * 2;
 
 	// figure out how many pixels to each character
 	// Add to the pixel width to be sure all lines are seen, and then be careful not to read nonexistant pixels later
-	int pixHeight = (src.rows / ascHeight) + 1;
-	int pixWidth = (src.cols / ascWidth) + 1;
+	int pixHeight = (src.rows / dblHeight) + 1;
+	int pixWidth = (src.cols / dblWidth) + 1;
 
 	// Now make a grid of those dimensions
 	ascWidth++; // add an extra for the end lines
+	dblWidth++;
 	char* ascArt = (char*)malloc(sizeof(char) * ascHeight * ascWidth);
+	int* dblArt = (int*)malloc(sizeof(int) * dblHeight * dblWidth);
 	memset(ascArt, '\0', ((int)ascHeight) * (ascWidth));
+	memset(dblArt, '\0', (sizeof(int) * dblHeight * dblWidth));
 	
 	// need to run spatialGradient() to get x and y. Then for each pixel, run arctan. Then average angles for each region, then angle -> asciii
 	// later, want to do maybe quarter regions to help spot ^v<>, and maybe even ()UnO
@@ -316,31 +403,37 @@ char * sobelToAscii(Mat src, int ascHeight) {
 	Sobel(src, ySobel, 5, 0, 1, 1);
 	phase(xSobel, ySobel, angle, true);
 
-	for (int y = 0; y < ascHeight; y++) {
-		for (int x = 0; x < ascWidth - 1 ; x++) {
+	for (int y = 0; y < dblHeight; y++) {
+		for (int x = 0; x < dblWidth - 1 ; x++) {
 			int avg = averageAngle(angle, x*pixWidth, (x + 1) * pixWidth, y*pixHeight, (y+1)*pixHeight);
+			dblArt[x + y * dblWidth] = avg; //TODO: see if this works better for me or not lol
 			//printf("%d, ", avg);
-			if(avg < 0) {
-				ascArt[x + y * ascWidth] = ' '; // blank
-				continue;
-			} 
-			// Note: sobel defiens 0 as up
-			if(avg <= 22.5 || avg > 157.5) ascArt[x + y * ascWidth] = '|';
-			else if(avg <=  67.5) ascArt[x + y * ascWidth] = '/';
-			else if(avg <= 112.5) ascArt[x + y * ascWidth] = '-';
-			else if(avg <= 157.5) ascArt[x + y * ascWidth] = '\\';
+			//if(avg < 0) {
+			//	dblArt[x + y * dblWidth] = ' '; // blank
+			//	continue;
+			//} 
+			//// Note: sobel defines 0 as up
+			//if(avg <= 22.5 || avg > 157.5) dblArt[x + y * dblWidth] = '|';
+			//else if(avg <=  67.5) dblArt[x + y * dblWidth] = '/';
+			//else if(avg <= 112.5) dblArt[x + y * dblWidth] = '-';
+			//else if(avg <= 157.5) dblArt[x + y * dblWidth] = '\\';
 		}
-		ascArt[(y + 1) * ascWidth - 1] = '\n';
+		dblArt[(y + 1) * dblWidth - 1] = '\n';
 		//printf("\n");
 	}
 	//printf("\n\n--------------------------------------------------------------------------\n");
 	//printf("##########################################################################\n");
 	//printf("--------------------------------------------------------------------------\n\n\n");
 	//std::cout << angle << std::endl;
-	ascArt[ascHeight * ascWidth - 1] = '\0'; // this replaces the last endline with an eof
+	dblArt[dblHeight * dblWidth - 1] = '\0'; // this replaces the last endline with an eof
 	#ifdef DEBUG_MODE
 		printf("%s\n", (char*)ascArt);
 	#endif
+
+	angleReplace(ascHeight, ascWidth, ascArt, dblArt);
+
+	std::cout << dblArt << std::endl;
+
 
 	return ascArt;
 }
@@ -402,10 +495,16 @@ void diffOfGaussians(int, void*){
 	demoDetectedEdges.setTo(Scalar(0, 0, 0), mask);
 
 	// update demo window
-	imshow(WINDOW_NAME_G, demoDetectedEdges);
+	Mat xSobel, ySobel, angle;
+	//src.convertTo(src, CV_32FC1);
+	Sobel(demoDetectedEdges, xSobel, 5, 1, 0, 1);
+	Sobel(demoDetectedEdges, ySobel, 5, 0, 1, 1);
+	phase(xSobel, ySobel, angle, true);
+	imshow(WINDOW_NAME_G, angle);
+	//imshow(WINDOW_NAME_G, demoDetectedEdges);
 
 	// print the result
-	char * result = outlineToAscii(demoDetectedEdges, demoAsciiHeight);
+	char * result = sobelToAscii(demoDetectedEdges, demoAsciiHeight); //outlineToAscii(demoDetectedEdges, demoAsciiHeight);
 	std::cout << result << std::endl;
 	free(result);
 	}
