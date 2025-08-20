@@ -14,7 +14,7 @@ using namespace cv;
 /************************************************************************/
 /* ASCII Art Generator							*/
 /*									*/
-/* Copyright (C) 2024 Noah Board					*/
+/* Copyright (C) 2025 Noah Board					*/
 /*									*/
 /* This program is free software: you can redistribute it and/or modify	*/
 /* it under the terms of the GNU General Public License as published by	*/
@@ -90,10 +90,40 @@ bool isWhite(Mat detectedEdges, int xMin, int xMax, int yMin, int yMax) {
 	return (lit / all) >= (xMax-xMin)/all;
 }
 
-/* averageAngle: Calculates the average angle in degrees inside a region of an angle vector.
- * The function ignores any angle marked as 0 (as this likely indicates there was no line)
+
+/* singleLinePhase: Calculates the angle from the X and Y components of the sobel filter. 
+ *    This matches the functionality of the phase function from open CV, except that a single 
+ *    line is produced instead of a double. 
+ *    The function returns a Mat containing the results. All angles are between 0 and 360 
+ *    (0 and 2pi). It contains -1 where there was a black (value <1) pixel. 
+ * args:
+ *	Mat xSobel: the x component of the sobel filter
+ *	Mat ySobel: the y component of the sobel filter
+ *	bool isDegrees: Controls for degrees or radians
+*/ 
+Mat singleLinePhase(Mat xSobel, Mat ySobel, bool isDegrees = true) {
+	Mat angle;
+	xSobel.copyTo(angle);
+	for(int i = 0 ; i < angle.cols ; i++){
+		for(int j = 0 ; j < angle.rows ; j++){
+			if(ySobel.at<float>(j, i) > 1 || xSobel.at<float>(j, i) > 1){
+				float convert = (isDegrees)?(180.0/3.14159):1.0;
+				float temp = convert*(atan2(ySobel.at<float>(j, i), xSobel.at<float>(j, i)));
+				angle.at<float>(j, i) = (temp < 0)? ((isDegrees)?360:2*3.14159)-temp:temp;
+			} else {
+				angle.at<float>(j, i) = -1;
+			}
+			//std::cout << angle.at<float>(j, i) << ", ";
+		}
+		//std::cout << std::endl;
+	}
+	return angle;
+}
+
+/* averageAngle: Calculates the average angle in radians between 0 and pi, inside a region of an angle vector.
+ * The function ignores any angle marked as -1
  * This function treats equiilent lines as the same (say, 90 and 270), so the returned value
- * 	is always in the range [0, 180)
+ * 	is always in the range [0, pi)
  * args:
  *	Mat angle: an image madeup of the angles calculated from the outline (assumes float)
  *	int xMin: minimum x pixel coordinate to check
@@ -101,7 +131,7 @@ bool isWhite(Mat detectedEdges, int xMin, int xMax, int yMin, int yMax) {
  *	int yMin: minimum y pixel coordinate to check
  *	int yMax: maximum y pixel coordinate to check
 */ 
-int averageAngle(Mat angle, int xMin, int xMax, int yMin, int yMax) {
+float averageAngle(Mat angle, int xMin, int xMax, int yMin, int yMax) {
 	// find average of angles. Check bounds first
 
 	if (xMin >= angle.cols) return -1;
@@ -109,23 +139,36 @@ int averageAngle(Mat angle, int xMin, int xMax, int yMin, int yMax) {
 	if (xMax > angle.cols) xMax = angle.cols;
 	if (yMax > angle.rows) yMax = angle.rows;
 
-	long sum = 0;
+	// convert angles to vectors, add all of the vectors, and find angle of result
+
+
+	double vectorX = 0;
+	double vectorY = 0;
 	int cnt = 0;
 	for (int x = xMin; x < xMax; x++) {
 		for (int y = yMin; y < yMax; y++) {
-			if(angle.at<float>(y, x) > 0){
-				float raw = angle.at<float>(y, x);
-				// don't need accuracy, and need to treat angles that creat the same line as equivilent
-				int angle = ((int) (raw + .5)) % 180;
-				sum += angle; 
+			if(angle.at<float>(y, x) >= 0){
+				double raw = (double) angle.at<float>(y, x);
+				// need to treat angles that creat the same line as equivilent, so force y to be positive
+				double coordX  = cos(raw);
+				double coordY = abs(sin(raw));
+				if(coordY < 0) {
+					vectorX -= coordX;
+					vectorY -= coordY;
+				} else {
+					vectorX += coordX;
+					vectorY += coordY;
+				}
 				cnt++;
 			}
 		}
 	}
 	float total = (xMax - xMin + 1)*(yMax - yMin + 1);
 	// skip blank or mostly blank areas
-	if(cnt == 0) return -1; //|| (cnt/total) < ((xMax - xMin)/total)) return -1;
-	return (int) sum/cnt;
+	if(cnt < (xMax - xMin) || cnt < (yMin - yMax) || (vectorX < 0.001 && vectorY < 0.001)) return -1; //|| (cnt/total) < ((xMax - xMin)/total)) return -1;
+	double ret = atan2(vectorY, vectorX);
+	float temp = (float) ret;
+	return ret;
 }
 
 /**************************************
@@ -231,13 +274,24 @@ void simpleReplace(int ascHeight, int ascWidth, char* result, char* giant) {
 }
 
 /* angleReplace: scale the image down based on combinations of lines. 
- * NOTE: assumes 2x each dimension for the source array
+ * NOTE: assumes 2x each dimension for the source array, and angles in radians between 0 and pi
  * int ascHeight: the height of the final image in characters
  * int ascWidth: the width of the final image in characters 
  * char* result: the array to store the final result in
  * char* source: the array containing the scaled up version of the ascii art image
  */
-void angleReplace(int ascHeight, int ascWidth, char* result, int* source) {
+void angleReplace(int ascHeight, int ascWidth, char* result, float *source) {
+	
+	// Define directions in radians. Defined like compas directions
+	const float RAD_N = M_PI/2;
+	const float RAD_NE = M_PI/3;
+	const float RAD_EN = M_PI/6;
+	const float RAD_E = 0;
+	// no south, since angles are between 0 and pi
+	const float RAD_W = M_PI;
+	const float RAD_WN = 5*M_PI/6;
+	const float RAD_NW = 3*M_PI/4;
+	
 	int dblWidth = ascWidth * 2 - 1;
 	int dblHeight = ascHeight * 2;
 	for (int y = 0; y < ascHeight; y++) {
@@ -250,55 +304,78 @@ void angleReplace(int ascHeight, int ascWidth, char* result, int* source) {
 			int a2 =  source[(2 * x)	+ (2 * y + 1)	* dblWidth];
 			int b2 =  source[(2 * x + 1)	+ (2 * y + 1)	* dblWidth];
 
-			int avg = -1; // throws off by 1, but lets all 0 cases be detected
+			double avgX = 0;
+			double avgY = 0;
+			double avg = -1; 
 			int cnt = 0;
-			if(a1 >= 0){ avg += a1; cnt++; }
-			if(b1 >= 0){ avg += b1; cnt++; }
-			if(a2 >= 0){ avg += a2; cnt++; }
-			if(b2 >= 0){ avg += b2; cnt++; }
-			if(cnt > 0) avg /= cnt;
-
+			// use vectors to compute averages
+			if(a1 >= 0){ 
+				double tempX = cos((double)a1);
+				double tempY = sin((double)a1);
+				if(tempY < 0){
+					avgX -= tempX;
+					avgY -= tempY;
+				}
+				else{
+					avgX += tempX;
+					avgY += tempY;
+				}
+				cnt++; 
+			}
+			if(b1 >= 0){ 
+				double tempX = cos((double)b1);
+				double tempY = sin((double)b1);
+				if(tempY < 0){
+					avgX -= tempX;
+					avgY -= tempY;
+				}
+				else{
+					avgX += tempX;
+					avgY += tempY;
+				}
+				cnt++; 
+			}
+			if(a2 >= 0){ 
+				double tempX = cos((double)a2);
+				double tempY = sin((double)a2);
+				if(tempY < 0){
+					avgX -= tempX;
+					avgY -= tempY;
+				}
+				else{
+					avgX += tempX;
+					avgY += tempY;
+				}
+				cnt++; 
+			}
+			if(b2 >= 0){ 
+				double tempX = cos((double)b2);
+				double tempY = sin((double)b2);
+				if(tempY < 0){
+					avgX -= tempX;
+					avgY -= tempY;
+				}
+				else{
+					avgX += tempX;
+					avgY += tempY;
+				}
+				cnt++; 
+			}
+			if(cnt > 0) avg = atan2(avgX, avgY);
+			if(avg < 0) avg += 2*M_PI;
+		/*   */ if(cnt == 0)
+				result[x + y * ascWidth] = ' '; // shortcut a common case
+		/* L */ else if((a1 < RAD_NW && a1 > RAD_NE) 		&& b1 < 0		&& (a2 < RAD_NW && a2 > RAD_NE) 	&& (b2 > RAD_WN || b2 < RAD_EN) && b2 > 0 )
+				result[x + y * ascWidth] = 'L';
+		/* _ */ else if( a1 < 0					&& b1 < 0		&& a2 > 0				&& b2 > 0		) 
+				result[x + y * ascWidth] = '_';
 
 			// if all else fails, just use average angle
-			if(cnt == 0) result[x + y * ascWidth] = ' ';
-			else if(avg <= 22.5 || avg > 157.5) result[x + y * ascWidth] = '|';
-			else if(avg <=  67.5) result[x + y * ascWidth] = '/';
-			else if(avg <= 112.5) result[x + y * ascWidth] = '-';
-			else if(avg <= 157.5) result[x + y * ascWidth] = '\\';
-
-			// if all 4 average to something, or is just one, the last stage will handle it
-
-
-
-			//square |= a1 << 3*8;
-			//square |= b1 << 2*8;
-			//square |= a1 << 1*8;
-			//square |= b1 << 0*8;
-
-			// find cases for =_-'`"".:/\|LT()[]Vv^<>nUhX#Y
-
-			// check for 
-
-			// check for specific cases 
-			//if (a1 == '/' && b1 == '/' && a2 == ' ' && b2 == ' ')	// //
-			//	result[x + y * ascWidth] = '/';			//   
-			//if (a1 == '/' && b1 == '/' && a2 == ' ' && b2 == ' ')	// //
-			//	result[x + y * ascWidth] = '/';			//   
-
-			//// general catch-alls
-			//else if(a1 == b1 && a1 == a2 && a1 == b2)
-			//	result[x + y * ascWidth] = a1;
-			//else if (b1 == ' ' && a2 == ' ' && b2 == ' ')		// * 
-			//	result[x + y * ascWidth] = '`';			//   
-			//else if (a1 == ' ' && a2 == ' ' && b2 == ' ')		//  *
-			//	result[x + y * ascWidth] = '\'';		//   
-			//else if (a1 == ' ' && b1 == ' ' && b2 == ' ')		//   
-			//	result[x + y * ascWidth] = '.';			// * 
-			//else if (a1 == ' ' && b1 == ' ' && a2 == ' ')		//   
-			//	result[x + y * ascWidth] = '.';			//  *
-			/// TODO:  if all else fails, just redo the angle calculation
-			//else result[x + y * ascWidth] = '?'; 
-			
+			else if(avg >= RAD_NE && avg <= RAD_NW) result[x + y * ascWidth] = '|';
+			else if(avg <= RAD_EN || avg >= RAD_WN) result[x + y * ascWidth] = '-';
+			else if(avg > RAD_EN && avg < RAD_NE) result[x + y * ascWidth] = '/';
+			else if(avg <= RAD_WN && avg > RAD_NW) result[x + y * ascWidth] = '\\';
+			else result[x + y * ascWidth] = '?';
 
 		} // for x
 		result[(y + 1) * ascWidth - 1] = '\n';
@@ -390,9 +467,9 @@ char * sobelToAscii(Mat src, int ascHeight) {
 	ascWidth++; // add an extra for the end lines
 	dblWidth++;
 	char* ascArt = (char*)malloc(sizeof(char) * ascHeight * ascWidth);
-	int* dblArt = (int*)malloc(sizeof(int) * dblHeight * dblWidth);
+	float* dblArt = (float*)malloc(sizeof(float) * dblHeight * dblWidth);
 	memset(ascArt, '\0', ((int)ascHeight) * (ascWidth));
-	memset(dblArt, '\0', (sizeof(int) * dblHeight * dblWidth));
+	memset(dblArt, '\0', (sizeof(float) * dblHeight * dblWidth));
 	
 	// need to run spatialGradient() to get x and y. Then for each pixel, run arctan. Then average angles for each region, then angle -> asciii
 	// later, want to do maybe quarter regions to help spot ^v<>, and maybe even ()UnO
@@ -401,29 +478,21 @@ char * sobelToAscii(Mat src, int ascHeight) {
 	//src.convertTo(src, CV_32FC1);
 	Sobel(src, xSobel, 5, 1, 0, 1);
 	Sobel(src, ySobel, 5, 0, 1, 1);
-	phase(xSobel, ySobel, angle, true);
-
+	//phase(xSobel, ySobel, angle, true);
+	angle = singleLinePhase(xSobel, ySobel, false);
+	// This should probably be a double line on snoopy - otherwise silhouettes would never showup right
+printf("\n\n--------------------------------------------------------------------------\n");
 	for (int y = 0; y < dblHeight; y++) {
 		for (int x = 0; x < dblWidth - 1 ; x++) {
-			int avg = averageAngle(angle, x*pixWidth, (x + 1) * pixWidth, y*pixHeight, (y+1)*pixHeight);
-			dblArt[x + y * dblWidth] = avg; //TODO: see if this works better for me or not lol
-			//printf("%d, ", avg);
-			//if(avg < 0) {
-			//	dblArt[x + y * dblWidth] = ' '; // blank
-			//	continue;
-			//} 
-			//// Note: sobel defines 0 as up
-			//if(avg <= 22.5 || avg > 157.5) dblArt[x + y * dblWidth] = '|';
-			//else if(avg <=  67.5) dblArt[x + y * dblWidth] = '/';
-			//else if(avg <= 112.5) dblArt[x + y * dblWidth] = '-';
-			//else if(avg <= 157.5) dblArt[x + y * dblWidth] = '\\';
+			dblArt[x + y * dblWidth] = averageAngle(angle, x*pixWidth, (x + 1) * pixWidth, y*pixHeight, (y+1)*pixHeight);
+			printf("%f, ", dblArt[x + y * dblWidth]);
 		}
 		dblArt[(y + 1) * dblWidth - 1] = '\n';
-		//printf("\n");
+		printf("\n");
 	}
-	//printf("\n\n--------------------------------------------------------------------------\n");
-	//printf("##########################################################################\n");
-	//printf("--------------------------------------------------------------------------\n\n\n");
+	printf("\n\n--------------------------------------------------------------------------\n");
+//	printf("##########################################################################\n");
+//	printf("--------------------------------------------------------------------------\n\n\n");
 	//std::cout << angle << std::endl;
 	dblArt[dblHeight * dblWidth - 1] = '\0'; // this replaces the last endline with an eof
 	#ifdef DEBUG_MODE
@@ -499,9 +568,8 @@ void diffOfGaussians(int, void*){
 	//src.convertTo(src, CV_32FC1);
 	Sobel(demoDetectedEdges, xSobel, 5, 1, 0, 1);
 	Sobel(demoDetectedEdges, ySobel, 5, 0, 1, 1);
-	phase(xSobel, ySobel, angle, true);
+	angle = singleLinePhase(xSobel, ySobel);
 	imshow(WINDOW_NAME_G, angle);
-	//imshow(WINDOW_NAME_G, demoDetectedEdges);
 
 	// print the result
 	char * result = sobelToAscii(demoDetectedEdges, demoAsciiHeight); //outlineToAscii(demoDetectedEdges, demoAsciiHeight);
@@ -551,14 +619,14 @@ void demoCannyImage(String fileName, int blurThreshold, int lowThreshold, int ra
 	waitKey(0);
 }
 
-/** demoCannyImage: display an image and allow users to tweak the settings for canny edge detection 
+/** demoGaussImage: display an image and allow users to tweak the settings for gauss edge detection 
  * so they know what to specify later 
- * fileName:		path to the image supplied by the user
- * blurThreshold:	parameter for image preprocessing
- * lowThreshold:	parameter for image preprocessing
- * ratio:		parameter for image preprocessing
- * kernelSize:		parameter for image preprocessing
- * ascHeight:		the target size for the final image in characters 
+ * String fileName:	path to the image supplied by the user
+ * int kernalSize1:	initial Kernal size for the first gaussian blur
+ * int kernalSize2:	initial Kernal size for the second gaussian blur
+ * int medianBlurSize:	parameter for image preprocessing
+ * int pixelThreshold:	brightness threshold for post processed pixels to be considered
+ * int ascHeight:	the target size for the final image in characters 
 **/
 void demoGaussImage(String fileName, int kernalSize1, int kernalSize2, int medianBlurSize, int pixelThreshold, int ascHeight){
 	Mat src, srcGray, detectedEdges;
@@ -566,7 +634,6 @@ void demoGaussImage(String fileName, int kernalSize1, int kernalSize2, int media
 	if (src.empty())
 	{
 		std::cout << "Could not open or find the image!\n" << std::endl;
-		std::cout << "Usage: " << "<THIS-FILE>" << " <Input image>" << std::endl;
 		return;
 	}
 
@@ -595,21 +662,22 @@ void demoGaussImage(String fileName, int kernalSize1, int kernalSize2, int media
 }
 
 
-/* convertImage: convert an image to ascii and return the result as a character array
- * String fileName: path to the image supplied by the user
- * int blurThreshold: parameter for image preprocessing
- * int lowThreshold: parameter for image preprocessing
- * int ratio: parameter for image preprocessing
- * int kernelSize: parameter for image preprocessing
- * int ascHeight: the target size for the final image in characters 
+/* convertCannyImage: convert an image to ascii and return the result as a character array
+ * Uses canny edge detection and converts lines to ascii characters based on the presence 
+ * or absence of pixels.
+ * String fileName:	path to the image supplied by the user
+ * int blurThreshold:	parameter for image preprocessing
+ * int lowThreshold:	parameter for image preprocessing
+ * int ratio:		parameter for image preprocessing
+ * int kernelSize:	parameter for image preprocessing
+ * int ascHeight:	the target size for the final image in characters 
 */
-char* convertImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight){
+char* convertCannyImage(String fileName, int blurThreshold, int lowThreshold, int ratio, int kernelSize, int ascHeight){
 	Mat src, srcGray, detectedEdges;
 	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
 	if (src.empty())
 	{
 		std::cout << "Could not open or find the image " << fileName << std::endl;
-		std::cout << "Usage: " << "<THIS-FILE>" << " <Input image>" << std::endl;
 		return NULL;
 	}
 
@@ -621,4 +689,56 @@ char* convertImage(String fileName, int blurThreshold, int lowThreshold, int rat
 	blur(srcGray, detectedEdges, Size(blurThreshold, blurThreshold));
 	Canny(detectedEdges, detectedEdges, lowThreshold, lowThreshold * ratio, kernelSize);
 	return outlineToAscii(detectedEdges, ascHeight);
+}
+
+/* convertGaussImage: convert an image to ascii and return the result as a character array
+ * Uses a difference of gaussians and sobel, and uses the resulting angels to create ascii
+ * String fileName:	path to the image supplied by the user
+ * int kernalSize1:	initial Kernal size for the first gaussian blur
+ * int kernalSize2:	initial Kernal size for the second gaussian blur
+ * int medianBlurSize:	parameter for image preprocessing
+ * int pixelThreshold:	brightness threshold for post processed pixels to be considered
+ * int ascHeight:	the target size for the final image in characters 
+**/
+char* convertGaussImage(String fileName, int kernalSize1, int kernalSize2, int medianBlurSize, int pixelThreshold, int ascHeight){
+	Mat src, srcGray, detectedEdges, gaus1, gaus2, medBlur;
+	
+	src = imread(samples::findFile(fileName), IMREAD_COLOR); // Load an image
+	if (src.empty())
+	{
+		std::cout << "Could not open or find the image!\n" << std::endl;
+		return NULL;
+	}
+
+	//set up for processing
+	cvtColor(src, srcGray, COLOR_BGR2GRAY);
+	
+	// copy image so can make changes without affecting original
+	detectedEdges = srcGray.clone();
+
+	// correct input values
+	if(!(kernalSize1&1)) kernalSize1+=1;
+	if(!(kernalSize2&1)) kernalSize2+=1;
+	if(!(medianBlurSize&1)) medianBlurSize+=1;
+	if(!(pixelThreshold&1)) pixelThreshold+=1;
+
+	// blur first to help
+	medianBlur(detectedEdges, medBlur, medianBlurSize);
+
+	// perform edge detection
+	GaussianBlur(medBlur, gaus1, Size(kernalSize1,kernalSize1), 0);
+	GaussianBlur(medBlur, gaus2, Size(kernalSize2,kernalSize2), 0);
+	detectedEdges = gaus1 - gaus2;
+
+	//now brighten everything past the threshold and delete the rest
+	Mat mask;
+	inRange(detectedEdges, Scalar(pixelThreshold, pixelThreshold, pixelThreshold), 
+		Scalar(255, 255, 255), mask);
+	detectedEdges.setTo(Scalar(255, 255, 255), mask);
+	inRange(detectedEdges, Scalar(0, 0, 0), 
+		Scalar(pixelThreshold, pixelThreshold, pixelThreshold), mask);
+	detectedEdges.setTo(Scalar(0, 0, 0), mask);
+
+	// print the result
+	return sobelToAscii(detectedEdges, ascHeight);
 }

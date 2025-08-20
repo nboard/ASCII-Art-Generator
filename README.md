@@ -23,23 +23,28 @@ Note that the order of the arguments does not matter.
 
 ### Argument definitions: 
 
-`-h, --help: Prints this message. Ignores all other args`
+`-h, --help              Prints this message. Ignores all other args.`
 
-`-d, --demo: Runs the program in demo mode`
+`-d, --demo              Runs the program in demo mode`
 
-`-b, --blur: Sets the blur threshold value`
+`-b, --blur              Sets the blur threshold value for canny`
 
-`-l, --low: Sets the low threshold value`
+`-l, --low               Sets the low threshold value for canny`
 
-`-r, --ratio: Sets the ratio value`
+`-r, --ratio             Sets the ratio value for canny`
 
-`-k, --kernel: Sets the kernel size value. Must be 3, 5, or 7`
+`-k, --kernel            Sets the kernel size value for canny. Must be 3, 5, or 7`
 
-`-c, --height: Sets the character height of the generated ASCII art in characters`
+`-c, --height            Sets the character height of the generated ascii art`
+`-1, --kernal1           Sets the size of the first kernal for gauss`
+`-2, --kernal2           Sets the size of the second kernal for gauss`
+`-m, --median            Sets the size of the median blur for gauss`
+`-t, --threshold         Sets the brighntess threshold for gauss`
+`-p, --preprocess        Sets the preprocess method. Must be either "canny" or "gauss". Assumes gauss unless specified.`
 
 ## Notes
 ### Getting better images
-The current algorithm essentially works by tracing the boundaries between colors and trying to find ASCII characters which best fit the outline created. This means it works best on images with few colors and sharp changes between colors (e.g. simple cartoon images). Note that having an outline around an image means the outline will be traced twice (inner color to line, line to outer color). Preprocessing images to remove outlines may improve results. 
+The current algorithm essentially works by tracing the boundaries between colors and trying to find ASCII characters which best fit the outline created. This means it works best on images with few colors and sharp changes between colors (e.g. simple cartoon images). Note that having an outline around an image means the outline will be traced twice (inner color to line, line to outer color). Preprocessing images to remove outlines may improve results. Currently, canny works far better than gauss, largly due to gauss being tied to the soval method, which I have not flushed out as thoroughly. 
 
 ### Example
 The following is an example from start to finish of how this project can be used to produce ASCII art. Consider the following image:

@@ -135,7 +135,16 @@ int main(int argc, char** argv)
 		}
 	}
 	else{
-		result = convertImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
+		switch (preProcess){
+			case 0:
+				result = convertGaussImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
+				break;
+			case 1:
+				result = convertCannyImage(fileName, blurThreshold, lowThreshold, ratio, kernelSize, ascHeight);
+				break;
+			default:
+			break;
+		}
 		std::cout << result << std::endl;
 		free(result);
 	} 
