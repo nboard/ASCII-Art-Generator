@@ -36,11 +36,17 @@ Note that the order of the arguments does not matter.
 `-k, --kernel            Sets the kernel size value for canny. Must be 3, 5, or 7`
 
 `-c, --height            Sets the character height of the generated ascii art`
+
 `-1, --kernal1           Sets the size of the first kernal for gauss`
+
 `-2, --kernal2           Sets the size of the second kernal for gauss`
+
 `-m, --median            Sets the size of the median blur for gauss`
+
 `-t, --threshold         Sets the brighntess threshold for gauss`
+
 `-p, --preprocess        Sets the preprocess method. Must be either "canny" or "gauss". Assumes gauss unless specified.`
+
 
 ## Notes
 ### Getting better images
